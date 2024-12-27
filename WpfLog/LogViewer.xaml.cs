@@ -119,7 +119,7 @@ namespace WpfLog
         #endregion
 
         /// <summary>
-        /// 当行高改变时触发重新渲染
+        /// 当行高改��时触发重新渲染
         /// </summary>
         private static void OnLineHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -427,15 +427,15 @@ namespace WpfLog
                 }
             }
 
-            // 更新画布高度
-            double newHeight = Math.Max(_logEntries.Count * LineHeight, ScrollViewer.ViewportHeight);
-            _visualHost.Height = newHeight;
-            LogHost.Height = newHeight;
+            // 修改画布高度计算
+            double totalHeight = _logEntries.Sum(e => e.Height);
+            _visualHost.Height = Math.Max(totalHeight, ScrollViewer.ViewportHeight);
+            LogHost.Height = _visualHost.Height;
 
             // 强制精确滚动到底部
             if (_autoScroll)
             {
-                ScrollViewer.ScrollToVerticalOffset(double.MaxValue);
+                ScrollViewer.ScrollToVerticalOffset(_visualHost.Height);
             }
 
             // 强制重新渲染背景
@@ -446,10 +446,10 @@ namespace WpfLog
         {
             _visualHost.ClearVisuals();
 
-            // 确保背景填充整个可见区域
-            double minHeight = Math.Max(_logEntries.Count * LineHeight, ScrollViewer.ViewportHeight);
-            _visualHost.Height = minHeight;
-            LogHost.Height = minHeight;
+            // 修改高度计算
+            double totalHeight = _logEntries.Sum(e => e.Height);
+            _visualHost.Height = Math.Max(totalHeight, ScrollViewer.ViewportHeight);
+            LogHost.Height = _visualHost.Height;
 
             if (_logEntries.Count == 0)
             {
@@ -460,10 +460,23 @@ namespace WpfLog
             double scrollOffset = ScrollViewer.VerticalOffset;
             double viewportHeight = ScrollViewer.ViewportHeight;
 
-            // 始终从顶部开始计算可见范围
+            // 修改可见范围计算
             int startIndex = 0;
-            int endIndex = Math.Min(_logEntries.Count - 1,
-                (int)((scrollOffset + viewportHeight) / LineHeight) + RenderMargin);
+            double currentHeight = 0;
+            while (startIndex < _logEntries.Count && currentHeight + _logEntries[startIndex].Height < scrollOffset - RenderMargin * LineHeight)
+            {
+                currentHeight += _logEntries[startIndex].Height;
+                startIndex++;
+            }
+
+            int endIndex = startIndex;
+            while (endIndex < _logEntries.Count && currentHeight < scrollOffset + viewportHeight + RenderMargin * LineHeight)
+            {
+                currentHeight += _logEntries[endIndex].Height;
+                endIndex++;
+            }
+
+            endIndex = Math.Min(endIndex, _logEntries.Count - 1);
 
             for (int i = startIndex; i <= endIndex; i++)
             {
@@ -493,7 +506,7 @@ namespace WpfLog
                         entry.TextColor,
                         VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-                    // 设置文本换行宽度
+                    // ��置文本换行宽度
                     if (AutoWrap)
                     {
                         formattedText.MaxTextWidth = LogHost.ActualWidth - 10; // 留出边距
@@ -604,7 +617,17 @@ namespace WpfLog
 
         private int GetLogIndexAtPosition(double y)
         {
-            int index = (int)(y / LineHeight);
+            int index = 0;
+            double currentHeight = 0;
+
+            while (index < _logEntries.Count && currentHeight <= y)
+            {
+                currentHeight += _logEntries[index].Height;
+                if (currentHeight > y)
+                    break;
+                index++;
+            }
+
             return Math.Max(0, Math.Min(_logEntries.Count - 1, index));
         }
 
