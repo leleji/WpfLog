@@ -47,26 +47,6 @@ namespace WpfLog
                 new PropertyMetadata(18.0, OnLineHeightChanged)); // 默认值20像素
 
         /// <summary>
-        /// 日志消息的依赖属性
-        /// </summary>
-        public static readonly DependencyProperty LogMessageProperty =
-            DependencyProperty.Register(
-                nameof(LogMessage),
-                typeof(string),
-                typeof(LogViewer),
-                new PropertyMetadata(null, OnLogMessageChanged));
-
-        /// <summary>
-        /// 日志颜色的依赖属性
-        /// </summary>
-        public static readonly DependencyProperty LogColorProperty =
-            DependencyProperty.Register(
-                nameof(LogColor),
-                typeof(Brush),
-                typeof(LogViewer),
-                new PropertyMetadata(Brushes.White));
-
-        /// <summary>
         /// 日志输出接口的依赖属性
         /// </summary>
         public static readonly DependencyProperty LogOutputProperty =
@@ -109,23 +89,6 @@ namespace WpfLog
             set => SetValue(LineHeightProperty, value);
         }
 
-        /// <summary>
-        /// 获取或设置日志消息
-        /// </summary>
-        public string LogMessage
-        {
-            get => (string)GetValue(LogMessageProperty);
-            set => SetValue(LogMessageProperty, value);
-        }
-
-        /// <summary>
-        /// 获取或设置日志颜色
-        /// </summary>
-        public Brush LogColor
-        {
-            get => (Brush)GetValue(LogColorProperty);
-            set => SetValue(LogColorProperty, value);
-        }
 
         /// <summary>
         /// 获取或设置日志输出接口
@@ -601,13 +564,6 @@ namespace WpfLog
             return Math.Max(0, Math.Min(_logEntries.Count - 1, index));
         }
 
-        private static void OnLogMessageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is LogViewer logViewer && e.NewValue is string message)
-            {
-                logViewer.AddLog(message, logViewer.LogColor);
-            }
-        }
 
         private static void OnLogOutputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
