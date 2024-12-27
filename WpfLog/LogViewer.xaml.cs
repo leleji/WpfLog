@@ -44,7 +44,8 @@ namespace WpfLog
                 nameof(LineHeight),
                 typeof(double),
                 typeof(LogViewer),
-                new PropertyMetadata(18.0, OnLineHeightChanged)); // 默认值20像素
+                new PropertyMetadata(18.0, OnLineHeightChanged)); // 默认值18像素
+
 
         /// <summary>
         /// 日志输出接口的依赖属性
@@ -55,6 +56,16 @@ namespace WpfLog
                 typeof(ILogOutput),
                 typeof(LogViewer),
                 new PropertyMetadata(null, OnLogOutputChanged));
+
+        /// <summary>
+        /// 是否自动换行的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty AutoWrapProperty =
+            DependencyProperty.Register(
+                nameof(AutoWrap),
+                typeof(bool),
+                typeof(LogViewer),
+                new PropertyMetadata(true, OnAutoWrapChanged)); // 默认开启自动换行
 
         #endregion
 
@@ -97,6 +108,12 @@ namespace WpfLog
         {
             get => (ILogOutput)GetValue(LogOutputProperty);
             set => SetValue(LogOutputProperty, value);
+        }
+
+        public bool AutoWrap
+        {
+            get => (bool)GetValue(AutoWrapProperty);
+            set => SetValue(AutoWrapProperty, value);
         }
 
         #endregion
@@ -226,7 +243,7 @@ namespace WpfLog
         private readonly FormattedText _dummyText; // 用于测量文本
         private readonly VisualHost _visualHost;
 
-        // 添加选中范围
+        // 添加中范围
         private int _selectionStart = -1;
         private int _selectionEnd = -1;
 
@@ -368,7 +385,26 @@ namespace WpfLog
             entry.Y = _logEntries.Count > 0
                 ? _logEntries[^1].Y + _logEntries[^1].Height
                 : 0;
-            entry.Height = LineHeight; // 使用属性而不是常量
+
+            // 创建临时 FormattedText 来计算高度
+            var formattedText = new FormattedText(
+                entry.Message,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Consolas"),
+                12,
+                entry.TextColor,
+                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+            if (AutoWrap)
+            {
+                formattedText.MaxTextWidth = LogHost.ActualWidth - 10;
+                entry.Height = formattedText.Height;
+            }
+            else
+            {
+                entry.Height = LineHeight;
+            }
 
             _logEntries.Add(entry);
 
@@ -444,7 +480,7 @@ namespace WpfLog
                         if (i >= selStart && i <= selEnd)
                         {
                             dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(80, 100, 100, 255)),
-                                null, new Rect(0, entry.Y, LogHost.ActualWidth, LineHeight));
+                                null, new Rect(0, entry.Y, LogHost.ActualWidth, entry.Height));
                         }
                     }
 
@@ -456,6 +492,14 @@ namespace WpfLog
                         12,
                         entry.TextColor,
                         VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+                    // 设置文本换行宽度
+                    if (AutoWrap)
+                    {
+                        formattedText.MaxTextWidth = LogHost.ActualWidth - 10; // 留出边距
+                        // 更新条目高度为实际文本高度
+                        entry.Height = formattedText.Height;
+                    }
 
                     dc.DrawText(formattedText, new Point(5, entry.Y));
                 }
@@ -564,7 +608,6 @@ namespace WpfLog
             return Math.Max(0, Math.Min(_logEntries.Count - 1, index));
         }
 
-
         private static void OnLogOutputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is LogViewer logViewer && e.NewValue is ILogOutput logOutput)
@@ -572,6 +615,15 @@ namespace WpfLog
                 logOutput.LogHandler = (message, color) => logViewer.AddLog(message, color);
             }
         }
+
+        private static void OnAutoWrapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is LogViewer logViewer)
+            {
+                logViewer.UpdateVisuals();
+            }
+        }
     }
+
 
 }

@@ -13,7 +13,20 @@ namespace WpfLogTestApp
         private int _retainLogEntries = 100;
         private double _lineHeight = 18;
 
+        private bool _autoWrap = true;
 
+        public bool AutoWrap
+        {
+            get => _autoWrap;
+            set
+            {
+                if (_autoWrap != value)
+                {
+                    _autoWrap = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         public bool ShowTimeStamp
         {
             get => _showTimeStamp;
@@ -93,7 +106,7 @@ namespace WpfLogTestApp
         public MainViewModel()
         {
             LogOutput = new LogOutput();
-            LogOutput.LogSuccess("这是一条成功日志");
+            LogOutput.LogSuccess("{\"status_code\":7192,\"tips\":\"\",\"status_msg\":{\"msg_type\":1,\"msg_content\":{\"tips\":\"已到达消息发送限制。对方回复你或互关之后，你们可以继续聊天\",\"template\":[]}},\"decision_type\":\"\",\"raw_check_code\":2,\"extra\":\"\",\"decision_conf\":\"\"}");
             ClearCommand = new RelayCommand(Clear);
             TestLogCommand = new RelayCommand(GenerateTestLogs);
         }

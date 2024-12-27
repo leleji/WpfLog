@@ -20,12 +20,19 @@
             <Button Content="测试日志" 
                     Command="{Binding TestLogCommand}"
                     Margin="5"/>
+            <CheckBox Content="自动换行" 
+                  IsChecked="{Binding AutoWrap}"
+                  Margin="5"/>
         </StackPanel>
 
         <l:LogViewer 
-      Grid.Row="1"
-      ShowTimeStamp="True"
-      LogOutput="{Binding LogOutput}"
-      BackgroundColor="Black"/>
+                         Grid.Row="1"
+                         ShowTimeStamp="{Binding ShowTimeStamp}"
+                         LogOutput="{Binding LogOutput}"
+                         BackgroundColor="Black"
+                         MaxLogEntries="{Binding MaxLogEntries}"
+                         RetainLogEntries="{Binding RetainLogEntries}"
+                         LineHeight="{Binding LineHeight}"
+                         AutoWrap="{Binding AutoWrap}"/>
     </Grid>
 </Window>
