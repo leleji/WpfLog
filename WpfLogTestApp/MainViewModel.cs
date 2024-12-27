@@ -13,31 +13,6 @@ namespace WpfLogTestApp
         private int _retainLogEntries = 100;
         private double _lineHeight = 18;
 
-        // 添加日志消息属性
-        private string _logMessage;
-        private Brush _logColor;
-
-        // 日志消息属性
-        public string LogMessage
-        {
-            get => _logMessage;
-            set
-            {
-                _logMessage = value;
-                OnPropertyChanged();
-            }
-        }
-
-        // 日志颜色属性
-        public Brush LogColor
-        {
-            get => _logColor;
-            set
-            {
-                _logColor = value;
-                OnPropertyChanged();
-            }
-        }
 
         public bool ShowTimeStamp
         {
@@ -118,6 +93,7 @@ namespace WpfLogTestApp
         public MainViewModel()
         {
             LogOutput = new LogOutput();
+            LogOutput.LogSuccess("这是一条成功日志");
             ClearCommand = new RelayCommand(Clear);
             TestLogCommand = new RelayCommand(GenerateTestLogs);
         }
@@ -129,7 +105,7 @@ namespace WpfLogTestApp
             LogOutput.LogError("这是一条错误日志");
             LogOutput.LogDebug("这是一条调试日志");
             LogOutput.LogSuccess("这是一条成功日志");
-            LogOutput.Log("这是一条测试日志", Brushes.Green);
+            LogOutput.Log(Brushes.Green,"这是一条测试日志");
         }
 
         private void Clear()

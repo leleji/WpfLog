@@ -22,13 +22,10 @@
                     Margin="5"/>
         </StackPanel>
 
-        <l:LogViewer x:Name="LogViewer" 
-                         Grid.Row="1"
-                         ShowTimeStamp="{Binding ShowTimeStamp}"
-                         LogOutput="{Binding LogOutput}"
-                         BackgroundColor="Black"
-                         MaxLogEntries="{Binding MaxLogEntries}"
-                         RetainLogEntries="{Binding RetainLogEntries}"
-                         LineHeight="{Binding LineHeight}"/>
+        <l:LogViewer 
+      Grid.Row="1"
+      ShowTimeStamp="True"
+      LogOutput="{Binding LogOutput}"
+      BackgroundColor="Black"/>
     </Grid>
 </Window>
