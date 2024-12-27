@@ -46,6 +46,36 @@ namespace WpfLog
                 typeof(LogViewer),
                 new PropertyMetadata(18.0, OnLineHeightChanged)); // 默认值20像素
 
+        /// <summary>
+        /// 日志消息的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty LogMessageProperty =
+            DependencyProperty.Register(
+                nameof(LogMessage),
+                typeof(string),
+                typeof(LogViewer),
+                new PropertyMetadata(null, OnLogMessageChanged));
+
+        /// <summary>
+        /// 日志颜色的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty LogColorProperty =
+            DependencyProperty.Register(
+                nameof(LogColor),
+                typeof(Brush),
+                typeof(LogViewer),
+                new PropertyMetadata(Brushes.White));
+
+        /// <summary>
+        /// 日志输出接口的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty LogOutputProperty =
+            DependencyProperty.Register(
+                nameof(LogOutput),
+                typeof(ILogOutput),
+                typeof(LogViewer),
+                new PropertyMetadata(null, OnLogOutputChanged));
+
         #endregion
 
         #region 公共属性
@@ -79,6 +109,33 @@ namespace WpfLog
             set => SetValue(LineHeightProperty, value);
         }
 
+        /// <summary>
+        /// 获取或设置日志消息
+        /// </summary>
+        public string LogMessage
+        {
+            get => (string)GetValue(LogMessageProperty);
+            set => SetValue(LogMessageProperty, value);
+        }
+
+        /// <summary>
+        /// 获取或设置日志颜色
+        /// </summary>
+        public Brush LogColor
+        {
+            get => (Brush)GetValue(LogColorProperty);
+            set => SetValue(LogColorProperty, value);
+        }
+
+        /// <summary>
+        /// 获取或设置日志输出接口
+        /// </summary>
+        public ILogOutput LogOutput
+        {
+            get => (ILogOutput)GetValue(LogOutputProperty);
+            set => SetValue(LogOutputProperty, value);
+        }
+
         #endregion
 
         /// <summary>
@@ -99,7 +156,7 @@ namespace WpfLog
             public Brush TextColor { get; set; }
             public double Y { get; set; }
             public double Height { get; set; }
-            
+
             // 重置对象状态
             public void Reset()
             {
@@ -213,9 +270,9 @@ namespace WpfLog
         // 添加是否显示时间前缀的依赖属性
         public static readonly DependencyProperty ShowTimeStampProperty =
             DependencyProperty.Register(
-                nameof(ShowTimeStamp), 
-                typeof(bool), 
-                typeof(LogViewer), 
+                nameof(ShowTimeStamp),
+                typeof(bool),
+                typeof(LogViewer),
                 new PropertyMetadata(true));
 
         public bool ShowTimeStamp
@@ -227,37 +284,15 @@ namespace WpfLog
         // 添加背景色的依赖属性
         public static readonly DependencyProperty BackgroundColorProperty =
             DependencyProperty.Register(
-                nameof(BackgroundColor), 
-                typeof(Brush), 
-                typeof(LogViewer), 
+                nameof(BackgroundColor),
+                typeof(Brush),
+                typeof(LogViewer),
                 new PropertyMetadata(Brushes.Black));
 
         public Brush BackgroundColor
         {
             get => (Brush)GetValue(BackgroundColorProperty);
             set => SetValue(BackgroundColorProperty, value);
-        }
-
-        // 添加日志消息的依赖属性
-        public static readonly DependencyProperty LogMessageProperty =
-            DependencyProperty.Register(
-                nameof(LogMessage),
-                typeof(LogMessageInfo),
-                typeof(LogViewer),
-                new PropertyMetadata(null, OnLogMessageChanged));
-
-        public LogMessageInfo LogMessage
-        {
-            get => (LogMessageInfo)GetValue(LogMessageProperty);
-            set => SetValue(LogMessageProperty, value);
-        }
-
-        private static void OnLogMessageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is LogViewer logViewer && e.NewValue is LogMessageInfo logMessage)
-            {
-                logViewer.AddLog(logMessage.Message, logMessage.Color);
-            }
         }
 
         public LogViewer()
@@ -273,7 +308,7 @@ namespace WpfLog
             _visualHost.SetBinding(VisualHost.BackgroundProperty,
                 new Binding(nameof(BackgroundColor)) { Source = this });
             LogHost.Children.Add(_visualHost);
-            
+
             // 确保 Canvas 和 VisualHost 填充整个可见区域
             LogHost.Width = double.NaN;
             LogHost.Height = double.NaN;
@@ -289,7 +324,7 @@ namespace WpfLog
 
             // 初始化文本测量对象
             _dummyText = new FormattedText(
-                "X", 
+                "X",
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 new Typeface("Consolas"),
@@ -327,8 +362,8 @@ namespace WpfLog
             if (string.IsNullOrEmpty(message)) return;
 
             var entry = _entryPool.Get();
-            
-            // 添加时间��缀
+
+            // 添加时间前缀
             if (ShowTimeStamp)
             {
                 entry.Message = $"[{DateTime.Now:HH:mm:ss.ff}] {message}";
@@ -337,7 +372,7 @@ namespace WpfLog
             {
                 entry.Message = message;
             }
-            
+
             entry.TextColor = color ?? Brushes.White;
 
             lock (_pendingEntries)
@@ -367,8 +402,8 @@ namespace WpfLog
         private void AddLogEntry(LogEntry entry)
         {
             // 计算新条目的位置
-            entry.Y = _logEntries.Count > 0 
-                ? _logEntries[^1].Y + _logEntries[^1].Height 
+            entry.Y = _logEntries.Count > 0
+                ? _logEntries[^1].Y + _logEntries[^1].Height
                 : 0;
             entry.Height = LineHeight; // 使用属性而不是常量
 
@@ -417,7 +452,7 @@ namespace WpfLog
             _visualHost.Height = minHeight;
             LogHost.Height = minHeight;
 
-            if (_logEntries.Count == 0) 
+            if (_logEntries.Count == 0)
             {
                 _visualHost.InvalidateVisual();
                 return;
@@ -425,17 +460,17 @@ namespace WpfLog
 
             double scrollOffset = ScrollViewer.VerticalOffset;
             double viewportHeight = ScrollViewer.ViewportHeight;
-            
+
             // 始终从顶部开始计算可见范围
             int startIndex = 0;
-            int endIndex = Math.Min(_logEntries.Count - 1, 
+            int endIndex = Math.Min(_logEntries.Count - 1,
                 (int)((scrollOffset + viewportHeight) / LineHeight) + RenderMargin);
 
             for (int i = startIndex; i <= endIndex; i++)
             {
                 var entry = _logEntries[i];
                 var visual = _visualPool.Get();
-                
+
                 using (var dc = visual.RenderOpen())
                 {
                     // 绘制选中背景
@@ -478,7 +513,7 @@ namespace WpfLog
                 _entryPool.Return(entry);
             }
             _logEntries.Clear();
-            
+
             lock (_pendingEntries)
             {
                 while (_pendingEntries.Count > 0)
@@ -487,7 +522,7 @@ namespace WpfLog
                     _entryPool.Return(entry);
                 }
             }
-            
+
             _visualHost.ClearVisuals();
             _visualHost.Height = 0;
         }
@@ -565,18 +600,22 @@ namespace WpfLog
             int index = (int)(y / LineHeight);
             return Math.Max(0, Math.Min(_logEntries.Count - 1, index));
         }
-    }
 
-    // 日志消息信息类
-    public class LogMessageInfo
-    {
-        public string Message { get; set; }
-        public Brush Color { get; set; }
-
-        public LogMessageInfo(string message, Brush color = null)
+        private static void OnLogMessageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            Message = message;
-            Color = color;
+            if (d is LogViewer logViewer && e.NewValue is string message)
+            {
+                logViewer.AddLog(message, logViewer.LogColor);
+            }
+        }
+
+        private static void OnLogOutputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is LogViewer logViewer && e.NewValue is ILogOutput logOutput)
+            {
+                logOutput.LogHandler = (message, color) => logViewer.AddLog(message, color);
+            }
         }
     }
-} 
+
+}

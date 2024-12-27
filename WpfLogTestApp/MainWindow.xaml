@@ -25,7 +25,7 @@
         <l:LogViewer x:Name="LogViewer" 
                          Grid.Row="1"
                          ShowTimeStamp="{Binding ShowTimeStamp}"
-                         LogMessage="{Binding LogMessage}"
+                         LogOutput="{Binding LogOutput}"
                          BackgroundColor="Black"
                          MaxLogEntries="{Binding MaxLogEntries}"
                          RetainLogEntries="{Binding RetainLogEntries}"

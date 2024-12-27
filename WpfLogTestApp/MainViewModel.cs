@@ -7,11 +7,37 @@ namespace WpfLogTestApp
 {
     public class MainViewModel : ViewModelBase
     {
-        private LogMessageInfo _logMessage;
+        private ILogOutput _logOutput;
         private bool _showTimeStamp = true;
         private int _maxLogEntries = 1000;
         private int _retainLogEntries = 100;
         private double _lineHeight = 18;
+
+        // 添加日志消息属性
+        private string _logMessage;
+        private Brush _logColor;
+
+        // 日志消息属性
+        public string LogMessage
+        {
+            get => _logMessage;
+            set
+            {
+                _logMessage = value;
+                OnPropertyChanged();
+            }
+        }
+
+        // 日志颜色属性
+        public Brush LogColor
+        {
+            get => _logColor;
+            set
+            {
+                _logColor = value;
+                OnPropertyChanged();
+            }
+        }
 
         public bool ShowTimeStamp
         {
@@ -26,15 +52,7 @@ namespace WpfLogTestApp
             }
         }
 
-        public LogMessageInfo LogMessage
-        {
-            get => _logMessage;
-            set
-            {
-                _logMessage = value;
-                OnPropertyChanged();
-            }
-        }
+
 
         /// <summary>
         /// 最大日志条数
@@ -87,23 +105,36 @@ namespace WpfLogTestApp
         public ICommand ClearCommand { get; }
         public ICommand TestLogCommand { get; }
 
+        public ILogOutput LogOutput
+        {
+            get => _logOutput;
+            set
+            {
+                _logOutput = value;
+                OnPropertyChanged();
+            }
+        }
+
         public MainViewModel()
         {
+            LogOutput = new LogOutput();
             ClearCommand = new RelayCommand(Clear);
             TestLogCommand = new RelayCommand(GenerateTestLogs);
         }
 
         private void GenerateTestLogs()
         {
-            LogMessage = new LogMessageInfo("这是一条信息日志", Brushes.White);
-            LogMessage = new LogMessageInfo("这是一条警告日志", Brushes.Yellow);
-            LogMessage = new LogMessageInfo("这是一条错误日志", Brushes.Red);
-            LogMessage = new LogMessageInfo("这是一条调试日志", Brushes.Gray);
+            LogOutput.LogInfo("这是一条信息日志");
+            LogOutput.LogWarning("这是一条警告日志");
+            LogOutput.LogError("这是一条错误日志");
+            LogOutput.LogDebug("这是一条调试日志");
+            LogOutput.LogSuccess("这是一条成功日志");
+            LogOutput.Log("这是一条测试日志", Brushes.Green);
         }
 
         private void Clear()
         {
-            // 你需要在 LogViewer 中实现这个功能
+            LogOutput.Clear();
         }
     }
 }
