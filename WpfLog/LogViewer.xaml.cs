@@ -67,6 +67,37 @@ namespace WpfLog
                 typeof(LogViewer),
                 new PropertyMetadata(true, OnAutoWrapChanged)); // 默认开启自动换行
 
+        /// <summary>
+        /// 渲染缓冲区大小的依赖属性
+        /// 该值决定了在可见区域之外预渲染的行数，值越大滚动越流畅，但会消耗更多内存
+        /// </summary>
+        public static readonly DependencyProperty RenderMarginProperty =
+            DependencyProperty.Register(
+                nameof(RenderMargin),
+                typeof(int),
+                typeof(LogViewer),
+                new PropertyMetadata(5, OnRenderMarginChanged)); // 默认值5行
+
+        /// <summary>
+        /// 日志内容左边距的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty LeftMarginProperty =
+            DependencyProperty.Register(
+                nameof(LeftMargin),
+                typeof(double),
+                typeof(LogViewer),
+                new PropertyMetadata(0.0, OnMarginChanged));
+
+        /// <summary>
+        /// 日志内容右边距的依赖属性
+        /// </summary>
+        public static readonly DependencyProperty RightMarginProperty =
+            DependencyProperty.Register(
+                nameof(RightMargin),
+                typeof(double),
+                typeof(LogViewer),
+                new PropertyMetadata(0.0, OnMarginChanged));
+
         #endregion
 
         #region 公共属性
@@ -116,12 +147,53 @@ namespace WpfLog
             set => SetValue(AutoWrapProperty, value);
         }
 
+        /// <summary>
+        /// 获取或设置渲染缓冲区大小
+        /// 该值表示在可见区域上下方额外渲染的行数
+        /// 增���此值可以使滚动更流畅，但会占用更多内存
+        /// 建议值：3-10，默认值：5
+        /// </summary>
+        public int RenderMargin
+        {
+            get => (int)GetValue(RenderMarginProperty);
+            set => SetValue(RenderMarginProperty, value);
+        }
+
+        /// <summary>
+        /// 获取或设置日志内容的左边距
+        /// </summary>
+        public double LeftMargin
+        {
+            get => (double)GetValue(LeftMarginProperty);
+            set => SetValue(LeftMarginProperty, value);
+        }
+
+        /// <summary>
+        /// 获取或设置日志内容的右边距
+        /// </summary>
+        public double RightMargin
+        {
+            get => (double)GetValue(RightMarginProperty);
+            set => SetValue(RightMarginProperty, value);
+        }
+
         #endregion
 
         /// <summary>
-        /// 当行高改��时触发重新渲染
+        /// 当行高改变时触发重新渲染
         /// </summary>
         private static void OnLineHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is LogViewer logViewer)
+            {
+                logViewer.UpdateVisuals();
+            }
+        }
+
+        /// <summary>
+        /// 当渲染缓冲区大小改变时触发重新渲染
+        /// </summary>
+        private static void OnRenderMarginChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is LogViewer logViewer)
             {
@@ -227,9 +299,6 @@ namespace WpfLog
                 }
             }
         }
-
-        // 配置参数
-        private const int RenderMargin = 5;
 
         // 内部状态
         private readonly List<LogEntry> _logEntries = new();
@@ -460,7 +529,7 @@ namespace WpfLog
             double scrollOffset = ScrollViewer.VerticalOffset;
             double viewportHeight = ScrollViewer.ViewportHeight;
 
-            // 修改可见范围计算
+            // 修改可见范围��算
             int startIndex = 0;
             double currentHeight = 0;
             while (startIndex < _logEntries.Count && currentHeight + _logEntries[startIndex].Height < scrollOffset - RenderMargin * LineHeight)
@@ -506,15 +575,14 @@ namespace WpfLog
                         entry.TextColor,
                         VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-                    // ��置文本换行宽度
+                    // 设置文本换行宽度
                     if (AutoWrap)
                     {
-                        formattedText.MaxTextWidth = LogHost.ActualWidth - 10; // 留出边距
-                        // 更新条目高度为实际文本高度
+                        formattedText.MaxTextWidth = LogHost.ActualWidth - (LeftMargin + RightMargin);
                         entry.Height = formattedText.Height;
                     }
 
-                    dc.DrawText(formattedText, new Point(5, entry.Y));
+                    dc.DrawText(formattedText, new Point(LeftMargin, entry.Y));
                 }
 
                 _visualHost.AddVisual(visual);
@@ -640,6 +708,15 @@ namespace WpfLog
         }
 
         private static void OnAutoWrapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is LogViewer logViewer)
+            {
+                logViewer.UpdateVisuals();
+            }
+        }
+
+        // 添加边距改变的回调方法
+        private static void OnMarginChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is LogViewer logViewer)
             {
