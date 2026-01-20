@@ -22,7 +22,9 @@ jobs:
 
     # 1. 恢复所有项目的依赖
     - name: Restore dependencies
-      run: dotnet restore
+      run: |
+        dotnet restore WpfLog.Core/WpfLog.Core.csproj
+        dotnet restore WpfLog/WpfLog.csproj
 
     # 2. 读取版本号 (修正了变量名不一致的问题)
     - name: Read project version
@@ -32,9 +34,11 @@ jobs:
         VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' WpfLog/WpfLog.csproj)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    # 3. 构建项目 (加上 --no-restore 提速)
-    - name: Build solution
-      run: dotnet build --configuration Release --no-restore
+    # 3. 构建时也指定项目
+    - name: Build projects
+      run: |
+        dotnet build WpfLog.Core/WpfLog.Core.csproj --configuration Release --no-restore
+        dotnet build WpfLog/WpfLog.csproj --configuration Release --no-restore
 
     # 4. 打包所有项目到同一个文件夹
     - name: Pack nupkgs
