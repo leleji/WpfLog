@@ -2,6 +2,7 @@ using System;
 using System.Windows.Input;
 using System.Windows.Media;
 using WpfLog;
+using WpfLog.Core;
 
 namespace WpfLogTestApp
 {
@@ -119,31 +120,7 @@ namespace WpfLogTestApp
             LogOutput.LogError("这是一条错误日志");
             LogOutput.LogDebug("这是一条调试日志");
             LogOutput.LogSuccess("这是一条成功日志");
-            LogOutput.Log(Brushes.Green, "这是一条测试日志");
-            _ = Task.Run(async () =>
-            {
-                for (int i = 0; i < 10000; i++)
-                {
-                    LogOutput.LogInfo("这是一条信息日志" + i);
-                    await Task.Delay(1);
-                }
-            });
-            _ = Task.Run(async () =>
-            {
-                for (int i = 0; i < 10000; i++)
-                {
-                    LogOutput.LogInfo("这是一条信息日志" + i);
-                    await Task.Delay(1);
-                }
-            });
-            _ = Task.Run(async () =>
-            {
-                for (int i = 0; i < 10000; i++)
-                {
-                    LogOutput.LogInfo("这是一条信息日志" + i);
-                    await Task.Delay(1);
-                }
-            });
+
         }
 
         private void Clear()

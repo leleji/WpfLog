@@ -2,18 +2,30 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using System.Linq;
-using System.Windows.Input;
-using System.Windows.Data;
+using WpfLog.Core;
 
 namespace WpfLog
 {
     public partial class LogViewer : UserControl
     {
+        // 在 LogViewer 类中定义颜色转换字典
+        private static readonly Dictionary<LogColor, Brush> ColorMap = new()
+        {
+            { LogColor.White, Brushes.White },
+            { LogColor.Yellow, Brushes.Yellow },
+            { LogColor.Red, Brushes.Red },
+            { LogColor.Gray, Brushes.Gray },
+            { LogColor.Green, Brushes.Green }
+        };
+
+
         #region 依赖属性定义
 
         /// <summary>
@@ -710,9 +722,26 @@ namespace WpfLog
 
         private static void OnLogOutputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is LogViewer logViewer && e.NewValue is ILogOutput logOutput)
+            if (d is LogViewer logViewer)
             {
-                logOutput.LogHandler = (message, color) => logViewer.AddLog(message, color);
+                if (e.OldValue is ILogOutput oldOutput) oldOutput.LogHandler = null;
+
+                if (e.NewValue is ILogOutput logOutput)
+                {
+                    logOutput.LogHandler = (message, colorEnum) =>
+                    {
+                        if (message == null)
+                        {
+                            logViewer.Clear();
+                        }
+                        else
+                        {
+                            // 在这里完成枚举到 Brush 的最后一步转换
+                            var brush = ColorMap.TryGetValue(colorEnum, out var b) ? b : Brushes.White;
+                            logViewer.AddLog(message, brush);
+                        }
+                    };
+                }
             }
         }
 
