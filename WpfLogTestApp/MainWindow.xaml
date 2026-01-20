@@ -29,10 +29,10 @@
                          Grid.Row="1"
                          ShowTimeStamp="{Binding ShowTimeStamp}"
                          LogOutput="{Binding LogOutput}"
-                         BackgroundColor="Black"
+                         
                          MaxLogEntries="{Binding MaxLogEntries}"
-                         RetainLogEntries="{Binding RetainLogEntries}"
-                         LineHeight="{Binding LineHeight}"
-                         AutoWrap="{Binding AutoWrap}"/>
+                         
+                         
+                        />
     </Grid>
 </Window>
