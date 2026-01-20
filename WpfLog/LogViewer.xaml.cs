@@ -14,25 +14,59 @@ namespace WpfLog
     public partial class LogViewer : UserControl
     {
         #region ==== 对外 API（保持不变） ====
-
+        /// <summary>
+        /// 允许的最大日志条数上限。
+        /// 当日志条数超过该值时，会触发裁剪逻辑（TrimIfNeeded）。
+        /// </summary>
         public static readonly DependencyProperty MaxLogEntriesProperty =
             DependencyProperty.Register(nameof(MaxLogEntries), typeof(int),
                 typeof(LogViewer), new PropertyMetadata(1000));
-
+        /// <summary>
+        /// 触发裁剪时，实际保留的日志条数。
+        /// 用于“批量裁剪”，避免频繁小规模删除带来的性能抖动。
+        /// </summary>
+        public static readonly DependencyProperty RetainLogEntriesProperty =
+            DependencyProperty.Register(nameof(RetainLogEntries), typeof(int),
+                typeof(LogViewer), new PropertyMetadata(100));
+        /// <summary>
+        /// 是否在日志前显示时间戳（HH:mm:ss.fff）。
+        /// </summary>
         public static readonly DependencyProperty ShowTimeStampProperty =
             DependencyProperty.Register(nameof(ShowTimeStamp), typeof(bool),
                 typeof(LogViewer), new PropertyMetadata(true));
-
+        /// <summary>
+        /// 是否在时间戳前额外显示日期（MM-dd）。
+        /// 仅当 ShowTimeStamp == true 时生效。
+        /// </summary>
         public static readonly DependencyProperty LogOutputProperty =
             DependencyProperty.Register(nameof(LogOutput), typeof(ILogOutput),
                 typeof(LogViewer), new PropertyMetadata(null, OnLogOutputChanged));
+        /// <summary>
+        /// 外部日志输出接口。
+        /// LogViewer 会将其绑定为日志接收入口。
+        /// </summary>
+        public static readonly DependencyProperty ShowDateProperty =
+            DependencyProperty.Register(
+                nameof(ShowDate),
+                typeof(bool),
+                typeof(LogViewer),
+                new PropertyMetadata(false));
 
+        public bool ShowDate
+        {
+            get => (bool)GetValue(ShowDateProperty);
+            set => SetValue(ShowDateProperty, value);
+        }
         public int MaxLogEntries
         {
             get => (int)GetValue(MaxLogEntriesProperty);
             set => SetValue(MaxLogEntriesProperty, value);
         }
-
+        public int RetainLogEntries
+        {
+            get => (int)GetValue(RetainLogEntriesProperty);
+            set => SetValue(RetainLogEntriesProperty, value);
+        }
         public bool ShowTimeStamp
         {
             get => (bool)GetValue(ShowTimeStampProperty);
@@ -48,26 +82,38 @@ namespace WpfLog
         #endregion
 
         #region ==== 内部类型 ====
-
+        /// <summary>
+        /// 表示一条已经完成排版的日志行。
+        /// 包含文本、绘制用的 DrawingVisual 以及行高。
+        /// </summary>
         private sealed class LogLine
         {
             public string Text { get; }
-            public DrawingVisual Visual { get; }
-            public double Height { get; }
+            public Brush Color { get; }
+
+            public DrawingVisual Visual { get; private set; }
+            public double Height { get; private set; }
 
             public LogLine(string text, Brush color, double maxWidth, double dpi)
             {
                 Text = text;
+                Color = color;
                 Visual = new DrawingVisual();
-
+                Rebuild(maxWidth, dpi);
+            }
+            /// <summary>
+            /// 根据新的宽度重新排版文本（用于窗口 Resize）
+            /// </summary>
+            public void Rebuild(double maxWidth, double dpi)
+            {
                 using var dc = Visual.RenderOpen();
                 var ft = new FormattedText(
-                    text,
+                    Text,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
                     new Typeface("Consolas"),
                     12,
-                    color,
+                    Color,
                     dpi)
                 {
                     MaxTextWidth = maxWidth
@@ -78,7 +124,10 @@ namespace WpfLog
             }
         }
 
-
+        /// <summary>
+        /// 用于承载 DrawingVisual 的宿主元素。
+        /// 通过维护 VisualChildren 集合参与 WPF 的视觉树。
+        /// </summary>
         private sealed class VisualHost : FrameworkElement
         {
             private readonly List<Visual> _children = new();
@@ -104,21 +153,41 @@ namespace WpfLog
                 foreach (var v in _children)
                     RemoveVisualChild(v);
                 _children.Clear();
+
             }
         }
 
         #endregion
 
         #region ==== 字段 ====
-
+        /// <summary>
+        /// 跨线程安全的日志缓冲队列。
+        /// 所有后台线程写日志都会先进这里。
+        /// </summary>
         private readonly ConcurrentQueue<(string Text, Brush Color)> _pendingLogs = new();
+
+        /// <summary>
+        /// 当前已经显示在界面上的日志行集合。
+        /// 顺序即显示顺序。
+        /// </summary>
         private readonly List<LogLine> _lines = new();
 
         private readonly VisualHost _visualHost = new();
-        private bool _autoScroll = true;
+
+        /// <summary>
+        /// 是否存在新增或删除日志，需要重新计算布局。
+        /// 用于避免每一帧都执行昂贵的布局操作。
+        /// </summary>
+        private bool _needsUpdate = false; // 标记是否需要更新布局
 
         private const int MaxDrainPerFrame = 50;
 
+        private bool _needsRebuild = false;
+        private System.Timers.Timer _resizeTimer;
+        /// <summary>
+        /// 是否启用自动滚动到底部。
+        /// 当用户手动向上滚动时会被关闭。
+        /// </summary>
         private bool _autoScrollEnabled = true;
 
         private static readonly Dictionary<LogColor, Brush> ColorMap = new()
@@ -135,11 +204,15 @@ namespace WpfLog
         public LogViewer()
         {
             InitializeComponent();
+            // 提高文字渲染的清晰度（减少模糊）
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
             LogHost.Children.Add(_visualHost);
 
             ScrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
             CompositionTarget.Rendering += OnRendering;
+            LogHost.SizeChanged += LogHost_SizeChanged;
         }
 
         private bool IsAtBottom()
@@ -149,14 +222,24 @@ namespace WpfLog
         }
 
         #region ==== 日志入口（线程安全） ====
-
+        /// <summary>
+        /// 添加一条日志（线程安全）。
+        /// 实际渲染会延迟到 UI 帧循环中处理。
+        /// </summary>
         public void AddLog(string message, Brush color)
         {
             if (string.IsNullOrEmpty(message))
                 return;
 
             if (ShowTimeStamp)
-                message = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+            {
+                var now = DateTime.Now;
+
+                if (ShowDate)
+                    message = $"[{now:MM-dd HH:mm:ss.fff}] {message}";
+                else
+                    message = $"[{now:HH:mm:ss.fff}] {message}";
+            }
 
             _pendingLogs.Enqueue((message, color ?? Brushes.White));
         }
@@ -166,48 +249,103 @@ namespace WpfLog
             _pendingLogs.Clear();
             _lines.Clear();
             _visualHost.Clear();
+            _autoScrollEnabled = true;
         }
 
         #endregion
 
         #region ==== UI 帧循环 ====
+        private void LogHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) < 1) return;
 
+            // 停止旧计时器，启动新计时器。只有停止缩放 200ms 后才真正 Rebuild
+            _resizeTimer?.Stop();
+            _resizeTimer = new System.Timers.Timer(200);
+            _resizeTimer.Elapsed += (s, ev) => {
+                _resizeTimer.Stop();
+                Dispatcher.BeginInvoke(() => { _needsRebuild = true; });
+            };
+            _resizeTimer.Start();
+        }
         private void OnRendering(object sender, EventArgs e)
         {
             DrainLogs();
-            UpdateLayoutPositions();
-        }
 
+            if (_needsRebuild)
+            {
+                RebuildAllLines();
+                _needsRebuild = false;
+                _needsUpdate = true; // 重排后一定要重新布局
+            }
+
+            if (!_needsUpdate) return;
+
+            UpdateLayoutPositions();
+            _needsUpdate = false;
+        }
+        private void RebuildAllLines()
+        {
+            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            double width = Math.Max(0, LogHost.ActualWidth - 10);
+
+            foreach (var line in _lines)
+            {
+                line.Rebuild(width, dpi);
+            }
+        }
+        /// <summary>
+        /// 从待处理队列中批量取出日志并创建 LogLine。
+        /// 每帧最多处理 MaxDrainPerFrame 条，防止 UI 卡顿。
+        /// </summary>
         private void DrainLogs()
         {
             int count = 0;
             var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             double width = Math.Max(0, LogHost.ActualWidth - 10);
 
-            while (count++ < MaxDrainPerFrame &&
-                   _pendingLogs.TryDequeue(out var item))
+            while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
             {
                 var line = new LogLine(item.Text, item.Color, width, dpi);
                 _lines.Add(line);
                 _visualHost.Add(line.Visual);
+                _needsUpdate = true; // 只有真的收到新日志，才标记需要更新
             }
 
-            TrimIfNeeded();
+            if (TrimIfNeeded()) _needsUpdate = true; // 如果删除了旧日志，也标记需要更新
         }
-
-        private void TrimIfNeeded()
+        /// <summary>
+        /// 当日志数量超过 MaxLogEntries 时，
+        /// 一次性裁剪到 RetainLogEntries，减少频繁删除带来的性能损耗。
+        /// </summary>
+        /// <returns>是否发生了裁剪</returns>
+        private bool TrimIfNeeded()
         {
+            // 只有当当前行数真正超过了“最大上限”时，才触发清理
             if (_lines.Count <= MaxLogEntries)
-                return;
+                return false;
 
-            int remove = _lines.Count - MaxLogEntries;
-            for (int i = 0; i < remove; i++)
+            // 计算需要删除的数量：当前总数 - 想要保留的数量
+            // 例如：1005条时触发，保留100条，则删除 905条
+            int removeCount = _lines.Count - RetainLogEntries;
+
+            // 防御性编程：确保不会删成负数
+            if (removeCount <= 0) return false;
+
+            // 批量从头部移除
+            for (int i = 0; i < removeCount; i++)
             {
+                // 始终移除第 0 个，因为移除后后面的会自动补位
                 _visualHost.RemoveAt(0);
                 _lines.RemoveAt(0);
             }
-        }
 
+            return true; // 返回 true 表示发生了变动，通知外层更新布局
+        }
+        /// <summary>
+        /// 重新计算所有日志行的 Y 偏移，并更新容器高度。
+        /// 同时根据自动滚动状态决定是否滚动到底部。
+        /// </summary>
         private void UpdateLayoutPositions()
         {
             double y = 0;
@@ -218,15 +356,15 @@ namespace WpfLog
             }
 
             _visualHost.Height = y;
-            LogHost.Height = y;   // ⭐ 关键一行
+            LogHost.Height = y;
 
+            // 只有在开启了自动滚动的情况下，才在添加新日志后滚动到底部
             if (_autoScrollEnabled)
             {
                 Dispatcher.BeginInvoke(
-                    new Action(() => ScrollViewer.ScrollToEnd()),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                new Action(ScrollViewer.ScrollToEnd),
+                System.Windows.Threading.DispatcherPriority.Background);
             }
-
         }
 
         #endregion

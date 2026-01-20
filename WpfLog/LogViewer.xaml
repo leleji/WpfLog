@@ -3,7 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ScrollViewer x:Name="ScrollViewer"
                   VerticalScrollBarVisibility="Auto">
-        <Canvas x:Name="LogHost">
+        <Canvas x:Name="LogHost" 
+                VerticalAlignment="Top" 
+                HorizontalAlignment="Stretch"
+                Background="Transparent">
             <Canvas.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="复制所有日志" Click="CopyAllLogs_Click"/>
@@ -11,6 +14,5 @@
                 </ContextMenu>
             </Canvas.ContextMenu>
         </Canvas>
-
     </ScrollViewer>
 </UserControl>

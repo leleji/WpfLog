@@ -120,6 +120,7 @@ namespace WpfLogTestApp
             LogOutput.LogError("这是一条错误日志");
             LogOutput.LogDebug("这是一条调试日志");
             LogOutput.LogSuccess("这是一条成功日志");
+            LogOutput.LogSuccess("这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志这是一条成功日志");
             _ = Task.Run(async () =>
             {
                 for (int i = 0; i < 1100; i++)
@@ -134,6 +135,7 @@ namespace WpfLogTestApp
         private void Clear()
         {
             LogOutput.Clear();
+
         }
     }
 }
