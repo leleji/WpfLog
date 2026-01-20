@@ -12,46 +12,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 检出代码
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 设置 .NET 环境
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 6.0.x # 支持 netstandard2.0
+        dotnet-version: 6.0.x
 
-    # 恢复依赖
+    # 1. 恢复所有项目的依赖
     - name: Restore dependencies
-      run: dotnet restore WpfLog/WpfLog.csproj
+      run: dotnet restore
 
-    # 读取版本号
+    # 2. 读取版本号 (修正了变量名不一致的问题)
     - name: Read project version
       id: get-version
       run: |
+        # 从其中一个项目读取版本即可
         VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' WpfLog/WpfLog.csproj)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    # 构建项目
-    - name: Build project
-      run: dotnet build WpfLog/WpfLog.csproj --no-restore --configuration Release
+    # 3. 构建项目 (加上 --no-restore 提速)
+    - name: Build solution
+      run: dotnet build --configuration Release --no-restore
 
-    # 打包为 nupkg
-    - name: Pack nupkg
-      run: dotnet pack WpfLog/WpfLog.csproj --no-build --configuration Release -o ./nupkgs
+    # 4. 打包所有项目到同一个文件夹
+    - name: Pack nupkgs
+      run: |
+        dotnet pack WpfLog.Core/WpfLog.Core.csproj --configuration Release --no-build -o ./nupkgs
+        dotnet pack WpfLog/WpfLog.csproj --configuration Release --no-build -o ./nupkgs
 
-    # 上传到 GitHub Releases
+    # 5. 上传到 GitHub Releases
     - name: Upload to GitHub Releases
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ./nupkgs/*.nupkg
+        artifacts: "./nupkgs/*.nupkg"
         token: ${{ secrets.GITHUB_TOKEN }}
+        # 修正：统一使用 v${{ env.VERSION }}
         tag: v${{ env.VERSION }}
         name: Release v${{ env.VERSION }}
+        allowUpdates: true
         draft: false
         prerelease: false
 
-    # 发布到 NuGet
+    # 6. 发布到 NuGet
     - name: Push to NuGet
-      run: dotnet nuget push ./nupkgs/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+      # 加上 --skip-duplicate 极其重要，防止因为某个包版本未变导致整个流程中断
+      run: dotnet nuget push "./nupkgs/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
