@@ -467,7 +467,7 @@ namespace WpfLog
 
             if (AutoWrap)
             {
-                formattedText.MaxTextWidth = LogHost.ActualWidth - 10;
+                formattedText.MaxTextWidth = Math.Max(0, LogHost.ActualWidth - 10);
                 entry.Height = formattedText.Height;
             }
             else
@@ -513,6 +513,13 @@ namespace WpfLog
 
         private void UpdateVisuals()
         {
+
+            if (LogHost.ActualWidth <= 0 || _logEntries.Count == 0)
+            {
+                _visualHost.ClearVisuals();
+                return;
+            }
+
             _visualHost.ClearVisuals();
 
             // 修改高度计算
@@ -578,7 +585,9 @@ namespace WpfLog
                     // 设置文本换行宽度
                     if (AutoWrap)
                     {
-                        formattedText.MaxTextWidth = LogHost.ActualWidth - (LeftMargin + RightMargin);
+                        double availableWidth = LogHost.ActualWidth - (LeftMargin + RightMargin);
+                        // 确保不为负数
+                        formattedText.MaxTextWidth = Math.Max(0, availableWidth);
                         entry.Height = formattedText.Height;
                     }
 
