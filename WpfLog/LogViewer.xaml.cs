@@ -106,17 +106,20 @@ namespace WpfLog
             /// </summary>
             public void Rebuild(double maxWidth, double dpi)
             {
+                // 清除之前的DrawingVisual内容
                 using var dc = Visual.RenderOpen();
+                
                 var ft = new FormattedText(
                     Text,
-                    CultureInfo.CurrentCulture,
+                    CultureInfo.InvariantCulture, // 使用InvariantCulture更快
                     FlowDirection.LeftToRight,
-                    new Typeface("Consolas"),
+                    CachedTypeface,
                     12,
                     Color,
                     dpi)
                 {
-                    MaxTextWidth = maxWidth
+                    MaxTextWidth = maxWidth > 0 ? maxWidth : double.PositiveInfinity,
+                    TextAlignment = TextAlignment.Left
                 };
 
                 Height = ft.Height;
@@ -174,13 +177,59 @@ namespace WpfLog
 
         private readonly VisualHost _visualHost = new();
 
-        /// <summary>
+/// <summary>
         /// 是否存在新增或删除日志，需要重新计算布局。
         /// 用于避免每一帧都执行昂贵的布局操作。
         /// </summary>
         private bool _needsUpdate = false; // 标记是否需要更新布局
+        
+        /// <summary>
+        /// 缓存上次计算的总高度，避免重复计算
+        /// </summary>
+        private double _cachedTotalHeight = 0;
+        
+        /// <summary>
+        /// 最后一次更新布局的行数，用于增量更新判断
+        /// </summary>
+        private int _lastLayoutLineCount = 0;
+        
+        /// <summary>
+        /// 是否需要强制重新计算所有布局位置（用于裁剪后）
+        /// </summary>
+        private bool _forceRecalculateAll = false;
 
-        private const int MaxDrainPerFrame = 50;
+        private const int MaxDrainPerFrame = 100; // 增加批处理量，减少UI更新频率
+
+        /// <summary>
+        /// Transform对象池，避免频繁创建TranslateTransform
+        /// </summary>
+        private readonly Stack<TranslateTransform> _transformPool = new();
+
+        /// <summary>
+        /// 从池中获取Transform，如果池为空则创建新的
+        /// </summary>
+        private TranslateTransform GetPooledTransform(double x, double y)
+        {
+            if (_transformPool.Count > 0)
+            {
+                var transform = _transformPool.Pop();
+                transform.X = x;
+                transform.Y = y;
+                return transform;
+            }
+            return new TranslateTransform(x, y);
+        }
+
+        /// <summary>
+        /// 将Transform回收到池中
+        /// </summary>
+        private void RecycleTransform(TranslateTransform transform)
+        {
+            if (_transformPool.Count < 100) // 限制池大小，避免内存泄漏
+            {
+                _transformPool.Push(transform);
+            }
+        }
 
         private bool _needsRebuild = false;
         private System.Timers.Timer _resizeTimer;
@@ -190,7 +239,7 @@ namespace WpfLog
         /// </summary>
         private bool _autoScrollEnabled = true;
 
-        private static readonly Dictionary<LogColor, Brush> ColorMap = new()
+private static readonly Dictionary<LogColor, Brush> ColorMap = new()
         {
             { LogColor.White, Brushes.White },
             { LogColor.Yellow, Brushes.Yellow },
@@ -198,6 +247,11 @@ namespace WpfLog
             { LogColor.Gray, Brushes.Gray },
             { LogColor.Green, Brushes.Green }
         };
+
+/// <summary>
+        /// 缓存的Typeface，避免重复创建
+        /// </summary>
+        private static readonly Typeface CachedTypeface = new("Microsoft YaHei UI");
 
         #endregion
 
@@ -226,30 +280,35 @@ namespace WpfLog
         /// 添加一条日志（线程安全）。
         /// 实际渲染会延迟到 UI 帧循环中处理。
         /// </summary>
-        public void AddLog(string message, Brush color)
+public void AddLog(string message, Brush color)
         {
             if (string.IsNullOrEmpty(message))
                 return;
 
             if (ShowTimeStamp)
             {
+                // 使用更高效的时间格式化
                 var now = DateTime.Now;
-
                 if (ShowDate)
-                    message = $"[{now:MM-dd HH:mm:ss.fff}] {message}";
+                    message = $"[{now.Month:00}-{now.Day:00} {now.Hour:00}:{now.Minute:00}:{now.Second:00}.{now.Millisecond:000}] {message}";
                 else
-                    message = $"[{now:HH:mm:ss.fff}] {message}";
+                    message = $"[{now.Hour:00}:{now.Minute:00}:{now.Second:00}.{now.Millisecond:000}] {message}";
             }
 
             _pendingLogs.Enqueue((message, color ?? Brushes.White));
         }
 
-        public void Clear()
+public void Clear()
         {
             _pendingLogs.Clear();
             _lines.Clear();
             _visualHost.Clear();
             _autoScrollEnabled = true;
+            
+            // 重置所有缓存状态
+            _cachedTotalHeight = 0;
+            _lastLayoutLineCount = 0;
+            _forceRecalculateAll = false;
         }
 
         #endregion
@@ -314,14 +373,14 @@ namespace WpfLog
 
             if (TrimIfNeeded()) _needsUpdate = true; // 如果删除了旧日志，也标记需要更新
         }
-        /// <summary>
+/// <summary>
         /// 当日志数量超过 MaxLogEntries 时，
         /// 一次性裁剪到 RetainLogEntries，减少频繁删除带来的性能损耗。
         /// </summary>
         /// <returns>是否发生了裁剪</returns>
         private bool TrimIfNeeded()
         {
-            // 只有当当前行数真正超过了“最大上限”时，才触发清理
+            // 只有当当前行数真正超过了"最大上限"时，才触发清理
             if (_lines.Count <= MaxLogEntries)
                 return false;
 
@@ -332,31 +391,69 @@ namespace WpfLog
             // 防御性编程：确保不会删成负数
             if (removeCount <= 0) return false;
 
-            // 批量从头部移除
+            // 批量移除：一次性移除多个，减少多次操作的开销
             for (int i = 0; i < removeCount; i++)
             {
-                // 始终移除第 0 个，因为移除后后面的会自动补位
                 _visualHost.RemoveAt(0);
-                _lines.RemoveAt(0);
             }
+
+            // 批量移除数据
+            _lines.RemoveRange(0, removeCount);
+
+// 重置缓存高度，需要重新计算
+            _cachedTotalHeight = 0;
+            _lastLayoutLineCount = _lines.Count;
+            _forceRecalculateAll = true; // 强制重新计算所有位置
 
             return true; // 返回 true 表示发生了变动，通知外层更新布局
         }
-        /// <summary>
+/// <summary>
         /// 重新计算所有日志行的 Y 偏移，并更新容器高度。
         /// 同时根据自动滚动状态决定是否滚动到底部。
         /// </summary>
         private void UpdateLayoutPositions()
         {
             double y = 0;
-            foreach (var line in _lines)
+            
+            // 如果需要强制重新计算所有位置，或者行数减少了，则全量计算
+            if (_forceRecalculateAll || _lines.Count < _lastLayoutLineCount)
             {
-                line.Visual.Transform = new TranslateTransform(0, y);
-                y += line.Height;
+                // 重新计算所有行的位置
+                foreach (var line in _lines)
+                {
+                    line.Visual.Transform = new TranslateTransform(0, y);
+                    y += line.Height;
+                }
+                _cachedTotalHeight = y;
+                _forceRecalculateAll = false;
+            }
+            // 如果只是新增行，则增量更新
+            else if (_lines.Count > _lastLayoutLineCount)
+            {
+                // 只更新新增行的位置
+                y = _cachedTotalHeight;
+                for (int i = _lastLayoutLineCount; i < _lines.Count; i++)
+                {
+                    var line = _lines[i];
+                    line.Visual.Transform = new TranslateTransform(0, y);
+                    y += line.Height;
+                }
+                _cachedTotalHeight = y;
+            }
+            // 如果行数相等，可能是窗口大小变化导致的高度变化，需要重新计算
+            else
+            {
+                foreach (var line in _lines)
+                {
+                    line.Visual.Transform = new TranslateTransform(0, y);
+                    y += line.Height;
+                }
+                _cachedTotalHeight = y;
             }
 
-            _visualHost.Height = y;
-            LogHost.Height = y;
+            _visualHost.Height = _cachedTotalHeight;
+            LogHost.Height = _cachedTotalHeight;
+            _lastLayoutLineCount = _lines.Count;
 
             // 只有在开启了自动滚动的情况下，才在添加新日志后滚动到底部
             if (_autoScrollEnabled)
