@@ -82,7 +82,7 @@ namespace WpfLog
         #endregion
 
         #region ==== 内部类型 ====
-        /// <summary>
+/// <summary>
         /// 表示一条已经完成排版的日志行。
         /// 包含文本、绘制用的 DrawingVisual 以及行高。
         /// </summary>
@@ -90,8 +90,10 @@ namespace WpfLog
         {
             public string Text { get; }
             public Brush Color { get; }
+            public bool IsSelected { get; set; }
 
             public DrawingVisual Visual { get; private set; }
+            public DrawingVisual BackgroundVisual { get; private set; }
             public double Height { get; private set; }
 
             public LogLine(string text, Brush color, double maxWidth, double dpi)
@@ -99,14 +101,16 @@ namespace WpfLog
                 Text = text;
                 Color = color;
                 Visual = new DrawingVisual();
+                BackgroundVisual = new DrawingVisual();
+                IsSelected = false;
                 Rebuild(maxWidth, dpi);
             }
-            /// <summary>
+/// <summary>
             /// 根据新的宽度重新排版文本（用于窗口 Resize）
             /// </summary>
             public void Rebuild(double maxWidth, double dpi)
             {
-                // 清除之前的DrawingVisual内容
+                // 重新绘制文本
                 using var dc = Visual.RenderOpen();
                 
                 var ft = new FormattedText(
@@ -125,6 +129,28 @@ namespace WpfLog
                 Height = ft.Height;
                 dc.DrawText(ft, new Point(0, 0));
             }
+
+            /// <summary>
+            /// 更新选中状态的背景色
+            /// </summary>
+            public void UpdateSelection(double maxWidth)
+            {
+                using var dc = BackgroundVisual.RenderOpen();
+                
+                if (IsSelected)
+                {
+                    // 绘制选中背景
+                    var selectionBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 215)) { Opacity = 0.3 };
+                    dc.DrawRectangle(selectionBrush, null, 
+                                   new Rect(0, 0, maxWidth, Height));
+                }
+                else
+                {
+                    // 清除背景（透明）
+                    dc.DrawRectangle(Brushes.Transparent, null, 
+                                   new Rect(0, 0, maxWidth, Height));
+                }
+            }
         }
 
         /// <summary>
@@ -138,10 +164,19 @@ namespace WpfLog
             protected override int VisualChildrenCount => _children.Count;
             protected override Visual GetVisualChild(int index) => _children[index];
 
-            public void Add(Visual v)
+public void Add(Visual v)
             {
                 _children.Add(v);
                 AddVisualChild(v);
+            }
+
+            public void AddRange(Visual[] visuals)
+            {
+                foreach (var v in visuals)
+                {
+                    _children.Add(v);
+                    AddVisualChild(v);
+                }
             }
 
             public void RemoveAt(int index)
@@ -193,43 +228,34 @@ namespace WpfLog
         /// </summary>
         private int _lastLayoutLineCount = 0;
         
-        /// <summary>
+/// <summary>
         /// 是否需要强制重新计算所有布局位置（用于裁剪后）
         /// </summary>
         private bool _forceRecalculateAll = false;
 
+        /// <summary>
+        /// 当前选中的日志行索引集合
+        /// </summary>
+        private readonly HashSet<int> _selectedIndices = new();
+
+        /// <summary>
+        /// 是否正在进行拖拽选择
+        /// </summary>
+        private bool _isSelecting = false;
+
+        /// <summary>
+        /// 拖拽选择的起始行索引
+        /// </summary>
+        private int _selectionStartIndex = -1;
+
+        /// <summary>
+        /// 鼠标按下时的位置
+        /// </summary>
+        private Point _mouseDownPosition;
+
         private const int MaxDrainPerFrame = 100; // 增加批处理量，减少UI更新频率
 
-        /// <summary>
-        /// Transform对象池，避免频繁创建TranslateTransform
-        /// </summary>
-        private readonly Stack<TranslateTransform> _transformPool = new();
 
-        /// <summary>
-        /// 从池中获取Transform，如果池为空则创建新的
-        /// </summary>
-        private TranslateTransform GetPooledTransform(double x, double y)
-        {
-            if (_transformPool.Count > 0)
-            {
-                var transform = _transformPool.Pop();
-                transform.X = x;
-                transform.Y = y;
-                return transform;
-            }
-            return new TranslateTransform(x, y);
-        }
-
-        /// <summary>
-        /// 将Transform回收到池中
-        /// </summary>
-        private void RecycleTransform(TranslateTransform transform)
-        {
-            if (_transformPool.Count < 100) // 限制池大小，避免内存泄漏
-            {
-                _transformPool.Push(transform);
-            }
-        }
 
         private bool _needsRebuild = false;
         private System.Timers.Timer _resizeTimer;
@@ -255,7 +281,7 @@ private static readonly Dictionary<LogColor, Brush> ColorMap = new()
 
         #endregion
 
-        public LogViewer()
+public LogViewer()
         {
             InitializeComponent();
             // 提高文字渲染的清晰度（减少模糊）
@@ -267,12 +293,160 @@ private static readonly Dictionary<LogColor, Brush> ColorMap = new()
             ScrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
             CompositionTarget.Rendering += OnRendering;
             LogHost.SizeChanged += LogHost_SizeChanged;
+            
+            // 添加鼠标事件支持选择
+            LogHost.MouseLeftButtonDown += LogHost_MouseLeftButtonDown;
+            LogHost.MouseLeftButtonUp += LogHost_MouseLeftButtonUp;
+            LogHost.MouseMove += LogHost_MouseMove;
         }
 
-        private bool IsAtBottom()
+private bool IsAtBottom()
         {
             return ScrollViewer.VerticalOffset >=
                    ScrollViewer.ExtentHeight - ScrollViewer.ViewportHeight - 2;
+        }
+
+        /// <summary>
+        /// 根据鼠标位置获取对应的日志行索引
+        /// </summary>
+        private int GetLineIndexFromPosition(Point position)
+        {
+            double y = 0;
+            for (int i = 0; i < _lines.Count; i++)
+            {
+                y += _lines[i].Height;
+                if (position.Y <= y)
+                    return i;
+            }
+            return -1; // 没有找到对应的行
+        }
+
+        private void LogHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _mouseDownPosition = e.GetPosition(LogHost);
+            _selectionStartIndex = GetLineIndexFromPosition(_mouseDownPosition);
+            _isSelecting = true;
+
+            // 如果没有按住Ctrl键，清除之前的选择
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+            {
+                ClearSelection();
+            }
+
+            // 如果点击在了有效行上
+            if (_selectionStartIndex >= 0)
+            {
+                ToggleSelection(_selectionStartIndex);
+            }
+
+            LogHost.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void LogHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isSelecting)
+            {
+                _isSelecting = false;
+                LogHost.ReleaseMouseCapture();
+            }
+            e.Handled = true;
+        }
+
+        private void LogHost_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_isSelecting && e.LeftButton == MouseButtonState.Pressed)
+            {
+                var currentPosition = e.GetPosition(LogHost);
+                int currentIndex = GetLineIndexFromPosition(currentPosition);
+
+                if (currentIndex >= 0 && currentIndex != _selectionStartIndex)
+                {
+                    // 拖拽选择：选择起始位置到当前位置之间的所有行
+                    RangeSelection(_selectionStartIndex, currentIndex);
+                }
+            }
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// 清除所有选择
+        /// </summary>
+        private void ClearSelection()
+        {
+            foreach (var index in _selectedIndices)
+            {
+                if (index >= 0 && index < _lines.Count)
+                {
+                    _lines[index].IsSelected = false;
+                    UpdateLineBackground(index);
+                }
+            }
+            _selectedIndices.Clear();
+        }
+
+        /// <summary>
+        /// 切换指定行的选择状态
+        /// </summary>
+        private void ToggleSelection(int index)
+        {
+            if (index < 0 || index >= _lines.Count) return;
+
+            if (_lines[index].IsSelected)
+            {
+                _lines[index].IsSelected = false;
+                _selectedIndices.Remove(index);
+            }
+            else
+            {
+                _lines[index].IsSelected = true;
+                _selectedIndices.Add(index);
+            }
+            UpdateLineBackground(index);
+        }
+
+        /// <summary>
+        /// 范围选择：从start到end之间的所有行
+        /// </summary>
+        private void RangeSelection(int start, int end)
+        {
+            // 清除之前的选择
+            ClearSelection();
+
+            // 确定起始和结束位置
+            int min = Math.Min(start, end);
+            int max = Math.Max(start, end);
+
+            // 选择范围内的所有行
+            for (int i = min; i <= max; i++)
+            {
+                if (i >= 0 && i < _lines.Count)
+                {
+                    _lines[i].IsSelected = true;
+                    _selectedIndices.Add(i);
+                    UpdateLineBackground(i);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 更新指定行的背景显示
+        /// </summary>
+        private void UpdateLineBackground(int index)
+        {
+            if (index < 0 || index >= _lines.Count) return;
+
+            var line = _lines[index];
+            double width = Math.Max(0, LogHost.ActualWidth - 10);
+            line.UpdateSelection(width);
+
+            // 确保背景Visual在正确的位置
+            double y = 0;
+            for (int i = 0; i < index; i++)
+            {
+                y += _lines[i].Height;
+            }
+            line.BackgroundVisual.Transform = new TranslateTransform(0, y);
         }
 
         #region ==== 日志入口（线程安全） ====
@@ -305,10 +479,15 @@ public void Clear()
             _visualHost.Clear();
             _autoScrollEnabled = true;
             
-            // 重置所有缓存状态
+// 重置所有缓存状态
             _cachedTotalHeight = 0;
             _lastLayoutLineCount = 0;
             _forceRecalculateAll = false;
+            
+            // 清除选择状态
+            _selectedIndices.Clear();
+            _isSelecting = false;
+            _selectionStartIndex = -1;
         }
 
         #endregion
@@ -363,11 +542,11 @@ public void Clear()
             var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             double width = Math.Max(0, LogHost.ActualWidth - 10);
 
-            while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
+while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
             {
                 var line = new LogLine(item.Text, item.Color, width, dpi);
                 _lines.Add(line);
-                _visualHost.Add(line.Visual);
+                _visualHost.AddRange(new[] { line.BackgroundVisual, line.Visual });
                 _needsUpdate = true; // 只有真的收到新日志，才标记需要更新
             }
 
@@ -415,13 +594,15 @@ public void Clear()
         {
             double y = 0;
             
-            // 如果需要强制重新计算所有位置，或者行数减少了，则全量计算
+// 如果需要强制重新计算所有位置，或者行数减少了，则全量计算
             if (_forceRecalculateAll || _lines.Count < _lastLayoutLineCount)
             {
-                // 重新计算所有行的位置
-                foreach (var line in _lines)
+                // 重新计算所有行的位置（包括背景）
+                for (int i = 0; i < _lines.Count; i++)
                 {
+                    var line = _lines[i];
                     line.Visual.Transform = new TranslateTransform(0, y);
+                    line.BackgroundVisual.Transform = new TranslateTransform(0, y);
                     y += line.Height;
                 }
                 _cachedTotalHeight = y;
@@ -436,6 +617,7 @@ public void Clear()
                 {
                     var line = _lines[i];
                     line.Visual.Transform = new TranslateTransform(0, y);
+                    line.BackgroundVisual.Transform = new TranslateTransform(0, y);
                     y += line.Height;
                 }
                 _cachedTotalHeight = y;
@@ -443,9 +625,11 @@ public void Clear()
             // 如果行数相等，可能是窗口大小变化导致的高度变化，需要重新计算
             else
             {
-                foreach (var line in _lines)
+                for (int i = 0; i < _lines.Count; i++)
                 {
+                    var line = _lines[i];
                     line.Visual.Transform = new TranslateTransform(0, y);
+                    line.BackgroundVisual.Transform = new TranslateTransform(0, y);
                     y += line.Height;
                 }
                 _cachedTotalHeight = y;
@@ -499,6 +683,17 @@ public void Clear()
         #endregion
 
         #region ==== 右键菜单 ====
+
+private void CopySelectedLogs_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedIndices.Count == 0) return;
+
+            var selectedTexts = _selectedIndices.OrderBy(i => i)
+                .Select(i => _lines[i].Text);
+            
+            var text = string.Join(Environment.NewLine, selectedTexts);
+            Clipboard.SetText(text);
+        }
 
         private void CopyAllLogs_Click(object sender, RoutedEventArgs e)
         {

@@ -7,9 +7,11 @@
                 VerticalAlignment="Top" 
                 HorizontalAlignment="Stretch"
                 Background="Transparent">
-            <Canvas.ContextMenu>
+<Canvas.ContextMenu>
                 <ContextMenu>
+                    <MenuItem Header="复制选中日志" Click="CopySelectedLogs_Click"/>
                     <MenuItem Header="复制所有日志" Click="CopyAllLogs_Click"/>
+                    <Separator/>
                     <MenuItem Header="清空日志" Click="ClearLogs_Click"/>
                 </ContextMenu>
             </Canvas.ContextMenu>
