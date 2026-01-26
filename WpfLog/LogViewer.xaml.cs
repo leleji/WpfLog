@@ -96,14 +96,17 @@ namespace WpfLog
             public DrawingVisual BackgroundVisual { get; private set; }
             public double Height { get; private set; }
 
-            public LogLine(string text, Brush color, double maxWidth, double dpi)
+public LogLine(string text, Brush color, double maxWidth, double dpi)
             {
                 Text = text;
                 Color = color;
                 Visual = new DrawingVisual();
                 BackgroundVisual = new DrawingVisual();
                 IsSelected = false;
-                Rebuild(maxWidth, dpi);
+                
+                // 确保maxWidth不为0或负数
+                var safeMaxWidth = Math.Max(maxWidth, 1.0);
+                Rebuild(safeMaxWidth, dpi);
             }
 /// <summary>
             /// 根据新的宽度重新排版文本（用于窗口 Resize）
@@ -112,6 +115,9 @@ namespace WpfLog
             {
                 // 重新绘制文本
                 using var dc = Visual.RenderOpen();
+                
+// 确保maxWidth不为0或负数，避免无穷大错误
+                var actualMaxWidth = Math.Max(maxWidth, 1.0); // 最小宽度为1
                 
                 var ft = new FormattedText(
                     Text,
@@ -122,7 +128,7 @@ namespace WpfLog
                     Color,
                     dpi)
                 {
-                    MaxTextWidth = maxWidth > 0 ? maxWidth : double.PositiveInfinity,
+                    MaxTextWidth = actualMaxWidth,
                     TextAlignment = TextAlignment.Left
                 };
 
@@ -259,11 +265,7 @@ public void Add(Visual v)
 
         private bool _needsRebuild = false;
         private System.Timers.Timer _resizeTimer;
-        /// <summary>
-        /// 是否启用自动滚动到底部。
-        /// 当用户手动向上滚动时会被关闭。
-        /// </summary>
-        private bool _autoScrollEnabled = true;
+
 
 private static readonly Dictionary<LogColor, Brush> ColorMap = new()
         {
@@ -279,6 +281,12 @@ private static readonly Dictionary<LogColor, Brush> ColorMap = new()
         /// </summary>
         private static readonly Typeface CachedTypeface = new("Microsoft YaHei UI");
 
+        /// <summary>
+        /// 是否启用自动滚动到底部。
+        /// 当用户手动向上滚动时会被关闭。
+        /// </summary>
+        private bool _autoScrollEnabled = true;
+
         #endregion
 
 public LogViewer()
@@ -288,19 +296,32 @@ public LogViewer()
             TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
-            LogHost.Children.Add(_visualHost);
+LogHost.Children.Add(_visualHost);
 
             ScrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
             CompositionTarget.Rendering += OnRendering;
             LogHost.SizeChanged += LogHost_SizeChanged;
             
-            // 添加鼠标事件支持选择
+// 添加鼠标事件支持选择
             LogHost.MouseLeftButtonDown += LogHost_MouseLeftButtonDown;
             LogHost.MouseLeftButtonUp += LogHost_MouseLeftButtonUp;
             LogHost.MouseMove += LogHost_MouseMove;
         }
 
-private bool IsAtBottom()
+
+
+        /// <summary>
+        /// 根据鼠标位置获取对应的日志行索引
+        /// </summary>
+        private void ScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (e.ExtentHeightChange == 0) // 用户滚动
+            {
+                _autoScrollEnabled = IsAtBottom();
+            }
+        }
+
+        private bool IsAtBottom()
         {
             return ScrollViewer.VerticalOffset >=
                    ScrollViewer.ExtentHeight - ScrollViewer.ViewportHeight - 2;
@@ -436,8 +457,8 @@ private bool IsAtBottom()
         {
             if (index < 0 || index >= _lines.Count) return;
 
-            var line = _lines[index];
-            double width = Math.Max(0, LogHost.ActualWidth - 10);
+var line = _lines[index];
+            double width = Math.Max(1, LogHost.ActualWidth - 10); // 确保最小宽度为1
             line.UpdateSelection(width);
 
             // 确保背景Visual在正确的位置
@@ -524,8 +545,8 @@ public void Clear()
         }
         private void RebuildAllLines()
         {
-            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-            double width = Math.Max(0, LogHost.ActualWidth - 10);
+var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            double width = Math.Max(1, LogHost.ActualWidth - 10); // 确保最小宽度为1
 
             foreach (var line in _lines)
             {
@@ -538,11 +559,11 @@ public void Clear()
         /// </summary>
         private void DrainLogs()
         {
-            int count = 0;
+int count = 0;
             var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-            double width = Math.Max(0, LogHost.ActualWidth - 10);
+            double width = Math.Max(1, LogHost.ActualWidth - 10); // 确保最小宽度为1
 
-while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
+            while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
             {
                 var line = new LogLine(item.Text, item.Color, width, dpi);
                 _lines.Add(line);
@@ -635,7 +656,7 @@ while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
                 _cachedTotalHeight = y;
             }
 
-            _visualHost.Height = _cachedTotalHeight;
+_visualHost.Height = _cachedTotalHeight;
             LogHost.Height = _cachedTotalHeight;
             _lastLayoutLineCount = _lines.Count;
 
@@ -652,13 +673,7 @@ while (count++ < MaxDrainPerFrame && _pendingLogs.TryDequeue(out var item))
 
         #region ==== LogOutput 绑定 ====
 
-        private void ScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
-        {
-            if (e.ExtentHeightChange == 0) // 用户滚动
-            {
-                _autoScrollEnabled = IsAtBottom();
-            }
-        }
+
 
         private static void OnLogOutputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
