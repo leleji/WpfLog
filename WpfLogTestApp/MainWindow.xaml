@@ -1,35 +1,47 @@
-﻿<Window x:Class="WpfLogTestApp.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:WpfLogTestApp"
-        xmlns:l="clr-namespace:WpfLog;assembly=WpfLog"
-        Title="Log Viewer Demo" Height="450" Width="800">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+﻿<Window
+    x:Class="WpfLogTestApp.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:l="clr-namespace:WpfLog;assembly=WpfLog"
+    xmlns:local="clr-namespace:WpfLogTestApp"
+    Title="Log Viewer Demo"
+    Width="800"
+    Height="450">
 
-        <StackPanel Orientation="Horizontal" Margin="5">
-            <CheckBox Content="显示时间戳" 
-                      IsChecked="{Binding ShowTimeStamp}"
-                      Margin="5"/>
-            <Button Content="清空日志" 
-                    Command="{Binding ClearCommand}"
-                    Margin="5"/>
-            <Button Content="测试日志" 
-                    Command="{Binding TestLogCommand}"
-                    Margin="5"/>
-        </StackPanel>
+    <TabControl>
+        <TabItem Header="日志查看器">
+            <TextBox>sss</TextBox>
+        </TabItem>
+        <TabItem Header="日志配置">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-        <l:LogViewer 
-                         Grid.Row="1"
-                         ShowTimeStamp="{Binding ShowTimeStamp}"
-                         LogOutput="{Binding LogOutput}"
-                         ShowDate="{Binding ShowTimeStamp}"
-                         MaxLogEntries="{Binding MaxLogEntries}"
-                         
-                         
-                        />
-    </Grid>
+                <StackPanel Margin="5" Orientation="Horizontal">
+                    <CheckBox
+                        Margin="5"
+                        Content="显示时间戳"
+                        IsChecked="{Binding ShowTimeStamp}" />
+                    <Button
+                        Margin="5"
+                        Command="{Binding ClearCommand}"
+                        Content="清空日志" />
+                    <Button
+                        Margin="5"
+                        Command="{Binding TestLogCommand}"
+                        Content="测试日志" />
+                </StackPanel>
+
+                <l:LogViewer
+                    Grid.Row="1"
+                    LogOutput="{Binding LogOutput}"
+                    MaxLogEntries="{Binding MaxLogEntries}"
+                    ShowDate="{Binding ShowTimeStamp}"
+                    ShowTimeStamp="{Binding ShowTimeStamp}" />
+            </Grid>
+        </TabItem>
+    </TabControl>
+
 </Window>

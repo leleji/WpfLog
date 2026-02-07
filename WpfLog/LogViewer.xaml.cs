@@ -287,9 +287,13 @@ private static readonly Dictionary<LogColor, Brush> ColorMap = new()
         /// </summary>
         private bool _autoScrollEnabled = true;
 
+        private const double MinRenderWidth = 2;
+
+        private bool _isViewActive = true;
+
         #endregion
 
-public LogViewer()
+        public LogViewer()
         {
             InitializeComponent();
             // 提高文字渲染的清晰度（减少模糊）
@@ -301,11 +305,29 @@ LogHost.Children.Add(_visualHost);
             ScrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
             CompositionTarget.Rendering += OnRendering;
             LogHost.SizeChanged += LogHost_SizeChanged;
+            IsVisibleChanged += LogViewer_IsVisibleChanged;
             
 // 添加鼠标事件支持选择
             LogHost.MouseLeftButtonDown += LogHost_MouseLeftButtonDown;
             LogHost.MouseLeftButtonUp += LogHost_MouseLeftButtonUp;
             LogHost.MouseMove += LogHost_MouseMove;
+        }
+
+        private void LogViewer_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            _isViewActive = IsVisible;
+            if (_isViewActive)
+            {
+                _forceRecalculateAll = true;
+                _needsRebuild = true;
+                _needsUpdate = true;
+            }
+        }
+
+        private bool HasValidRenderWidth()
+        {
+            var width = LogHost.ActualWidth - 10;
+            return !double.IsNaN(width) && width >= MinRenderWidth;
         }
 
 
@@ -518,6 +540,8 @@ public void Clear()
         {
             if (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) < 1) return;
 
+            if (!HasValidRenderWidth()) return;
+
             // 停止旧计时器，启动新计时器。只有停止缩放 200ms 后才真正 Rebuild
             _resizeTimer?.Stop();
             _resizeTimer = new System.Timers.Timer(200);
@@ -529,9 +553,11 @@ public void Clear()
         }
         private void OnRendering(object sender, EventArgs e)
         {
+            if (!_isViewActive) return;
+
             DrainLogs();
 
-            if (_needsRebuild)
+            if (_needsRebuild && HasValidRenderWidth())
             {
                 RebuildAllLines();
                 _needsRebuild = false;
@@ -545,7 +571,9 @@ public void Clear()
         }
         private void RebuildAllLines()
         {
-var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            if (!HasValidRenderWidth()) return;
+
+            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             double width = Math.Max(1, LogHost.ActualWidth - 10); // 确保最小宽度为1
 
             foreach (var line in _lines)
@@ -559,7 +587,9 @@ var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         /// </summary>
         private void DrainLogs()
         {
-int count = 0;
+            if (!HasValidRenderWidth()) return;
+
+            int count = 0;
             var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             double width = Math.Max(1, LogHost.ActualWidth - 10); // 确保最小宽度为1
 
@@ -594,6 +624,8 @@ int count = 0;
             // 批量移除：一次性移除多个，减少多次操作的开销
             for (int i = 0; i < removeCount; i++)
             {
+                // 每条日志包含两个Visual（背景+文本）
+                _visualHost.RemoveAt(0);
                 _visualHost.RemoveAt(0);
             }
 
