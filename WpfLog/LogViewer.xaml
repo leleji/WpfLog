@@ -2,19 +2,19 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ScrollViewer x:Name="ScrollViewer"
-                  VerticalScrollBarVisibility="Auto">
+                  VerticalScrollBarVisibility="Auto"
+                  Background="Transparent">
+        <ScrollViewer.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="复制选中日志" Click="CopySelectedLogs_Click"/>
+                <MenuItem Header="复制所有日志" Click="CopyAllLogs_Click"/>
+                <Separator/>
+                <MenuItem Header="清空日志" Click="ClearLogs_Click"/>
+            </ContextMenu>
+        </ScrollViewer.ContextMenu>
         <Canvas x:Name="LogHost" 
                 VerticalAlignment="Top" 
                 HorizontalAlignment="Stretch"
-                Background="Transparent">
-<Canvas.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Header="复制选中日志" Click="CopySelectedLogs_Click"/>
-                    <MenuItem Header="复制所有日志" Click="CopyAllLogs_Click"/>
-                    <Separator/>
-                    <MenuItem Header="清空日志" Click="ClearLogs_Click"/>
-                </ContextMenu>
-            </Canvas.ContextMenu>
-        </Canvas>
+                Background="Transparent" />
     </ScrollViewer>
 </UserControl>
