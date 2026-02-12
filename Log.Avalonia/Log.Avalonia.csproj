@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <PackageId>AvaLog.Le</PackageId>
-    <Version>1.0.0</Version>
+    <PackageId>LeLog.Avalonia</PackageId>
+    <Version>1.2.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\WpfLog.Core\WpfLog.Core.csproj" />
+    <ProjectReference Include="..\Log.Core\Log.Core.csproj" />
   </ItemGroup>
 
 </Project>

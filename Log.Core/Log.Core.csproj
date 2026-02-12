@@ -4,8 +4,9 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<PackageId>WpfLog.Le.Core</PackageId>
-	 <Version>1.2.1</Version>
+    <PackageId>LeLog.Core</PackageId>
+    <AssemblyName>Log.Core</AssemblyName>
+    <Version>1.2.2</Version>
   </PropertyGroup>
 
 </Project>

@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AvaLog\AvaLog.csproj" />
+    <ProjectReference Include="..\Log.Avalonia\Log.Avalonia.csproj" />
   </ItemGroup>
 
 </Project>

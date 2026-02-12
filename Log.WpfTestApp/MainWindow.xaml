@@ -2,7 +2,7 @@
     x:Class="WpfLogTestApp.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:l="clr-namespace:WpfLog;assembly=WpfLog"
+    xmlns:l="clr-namespace:WpfLog;assembly=Log.Wpf"
     xmlns:local="clr-namespace:WpfLogTestApp"
     Title="Log Viewer Demo"
     Width="800"

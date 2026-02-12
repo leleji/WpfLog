@@ -18,33 +18,36 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: 8.0.x
 
     # 1. 恢复所有项目的依赖
     - name: Restore dependencies
       run: |
-        dotnet restore WpfLog.Core/WpfLog.Core.csproj
-        dotnet restore WpfLog/WpfLog.csproj
+        dotnet restore Log.Core/Log.Core.csproj
+        dotnet restore Log.Wpf/Log.Wpf.csproj
+        dotnet restore Log.Avalonia/Log.Avalonia.csproj
 
     # 2. 读取版本号 (修正了变量名不一致的问题)
     - name: Read project version
       id: get-version
       run: |
         # 从其中一个项目读取版本即可
-        VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' WpfLog/WpfLog.csproj)
+        VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' Log.Wpf/Log.Wpf.csproj)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     # 3. 构建时也指定项目
     - name: Build projects
       run: |
-        dotnet build WpfLog.Core/WpfLog.Core.csproj --configuration Release --no-restore
-        dotnet build WpfLog/WpfLog.csproj --configuration Release --no-restore
+        dotnet build Log.Core/Log.Core.csproj --configuration Release --no-restore
+        dotnet build Log.Wpf/Log.Wpf.csproj --configuration Release --no-restore
+        dotnet build Log.Avalonia/Log.Avalonia.csproj --configuration Release --no-restore
 
     # 4. 打包所有项目到同一个文件夹
     - name: Pack nupkgs
       run: |
-        dotnet pack WpfLog.Core/WpfLog.Core.csproj --configuration Release --no-build -o ./nupkgs
-        dotnet pack WpfLog/WpfLog.csproj --configuration Release --no-build -o ./nupkgs
+        dotnet pack Log.Core/Log.Core.csproj --configuration Release --no-build -o ./nupkgs
+        dotnet pack Log.Wpf/Log.Wpf.csproj --configuration Release --no-build -o ./nupkgs
+        dotnet pack Log.Avalonia/Log.Avalonia.csproj --configuration Release --no-build -o ./nupkgs
 
     # 5. 上传到 GitHub Releases
     - name: Upload to GitHub Releases

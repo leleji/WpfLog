@@ -3,15 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35431.28
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WpfLogTestApp", "WpfLogTestApp\WpfLogTestApp.csproj", "{33227DCA-0A45-4EA5-9219-EEC8B233879A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Log.WpfTestApp", "Log.WpfTestApp\Log.WpfTestApp.csproj", "{33227DCA-0A45-4EA5-9219-EEC8B233879A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfLog", "WpfLog\WpfLog.csproj", "{D9F26987-877A-4C2E-93BA-C7C85552D481}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Log.Wpf", "Log.Wpf\Log.Wpf.csproj", "{D9F26987-877A-4C2E-93BA-C7C85552D481}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfLog.Core", "WpfLog.Core\WpfLog.Core.csproj", "{7872D35D-42D5-4A0B-AC49-1FC2BCD92E76}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Log.Core", "Log.Core\Log.Core.csproj", "{7872D35D-42D5-4A0B-AC49-1FC2BCD92E76}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AvaLog", "AvaLog\AvaLog.csproj", "{7F610E6A-4A3C-4F4A-9C0C-84AC9E3D3C1B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Log.Avalonia", "Log.Avalonia\Log.Avalonia.csproj", "{7F610E6A-4A3C-4F4A-9C0C-84AC9E3D3C1B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AvaLogTestApp", "AvaLogTestApp\AvaLogTestApp.csproj", "{E0E99A5F-2A6C-4C40-8C58-77A2A8EFC5A9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Log.AvaloniaTestApp", "Log.AvaloniaTestApp\Log.AvaloniaTestApp.csproj", "{E0E99A5F-2A6C-4C40-8C58-77A2A8EFC5A9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -59,6 +59,11 @@ public sealed class MainViewModel : ViewModelBase
         LogOutput = new LogOutput();
         ClearCommand = new RelayCommand(Clear);
         TestLogCommand = new RelayCommand(GenerateTestLogs);
+        LogOutput.LogInfo("这是一条信息日志");
+        LogOutput.LogWarning("这是一条警告日志");
+        LogOutput.LogError("这是一条错误日志");
+        LogOutput.LogDebug("这是一条调试日志");
+        LogOutput.LogSuccess("这是一条成功日志");
     }
 
     private void GenerateTestLogs()

@@ -267,10 +267,10 @@ public void Add(Visual v)
         private System.Timers.Timer _resizeTimer;
 
 
-private static readonly Dictionary<LogColor, Brush> ColorMap = new()
+        private static readonly Dictionary<LogColor, Brush> ColorMap = new()
         {
-            { LogColor.White, Brushes.White },
-            { LogColor.Yellow, Brushes.Yellow },
+            { LogColor.White, Brushes.Black },
+            { LogColor.Yellow, new SolidColorBrush(Color.FromRgb(184, 134, 11)) },
             { LogColor.Red, Brushes.Red },
             { LogColor.Gray, Brushes.Gray },
             { LogColor.Green, Brushes.Green }

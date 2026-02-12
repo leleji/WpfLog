@@ -1,0 +1,23 @@
+<UserControl x:Class="AvaLog.LogViewer"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AvaLog">
+  <ScrollViewer x:Name="ScrollViewer"
+                VerticalScrollBarVisibility="Auto"
+                Background="Transparent"
+                HorizontalContentAlignment="Left"
+                VerticalContentAlignment="Top">
+    <ScrollViewer.ContextMenu>
+      <ContextMenu>
+        <MenuItem Header="复制选中日志" Click="CopySelectedLogs_Click" />
+        <MenuItem Header="复制所有日志" Click="CopyAllLogs_Click" />
+        <Separator />
+        <MenuItem Header="清空日志" Click="ClearLogs_Click" />
+      </ContextMenu>
+    </ScrollViewer.ContextMenu>
+    <local:LogCanvas x:Name="LogCanvas"
+                     Focusable="True"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Top" />
+  </ScrollViewer>
+</UserControl>

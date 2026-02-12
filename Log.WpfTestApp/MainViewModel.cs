@@ -12,22 +12,6 @@ namespace WpfLogTestApp
         private bool _showTimeStamp = true;
         private int _maxLogEntries = 1000;
         private int _retainLogEntries = 100;
-        private double _lineHeight = 18;
-
-        private bool _autoWrap = true;
-
-        public bool AutoWrap
-        {
-            get => _autoWrap;
-            set
-            {
-                if (_autoWrap != value)
-                {
-                    _autoWrap = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
         public bool ShowTimeStamp
         {
             get => _showTimeStamp;
@@ -75,21 +59,6 @@ namespace WpfLogTestApp
             }
         }
 
-        /// <summary>
-        /// 日志行高
-        /// </summary>
-        public double LineHeight
-        {
-            get => _lineHeight;
-            set
-            {
-                if (_lineHeight != value)
-                {
-                    _lineHeight = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
 
         public ICommand ClearCommand { get; }
         public ICommand TestLogCommand { get; }

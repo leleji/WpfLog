@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\WpfLog\WpfLog.csproj" />
+    <ProjectReference Include="..\Log.Wpf\Log.Wpf.csproj" />
   </ItemGroup>
 
 </Project>
