@@ -1,0 +1,18 @@
+<UserControl x:Class="AvaLog.LogViewer"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AvaLog">
+  <ScrollViewer x:Name="ScrollViewer"
+                VerticalScrollBarVisibility="Auto"
+                Background="Transparent">
+    <ItemsControl x:Name="ItemsHost">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="local:LogLine">
+          <TextBlock Text="{Binding Text}"
+                     Foreground="{Binding Foreground}"
+                     TextWrapping="Wrap" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </ScrollViewer>
+</UserControl>

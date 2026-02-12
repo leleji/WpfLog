@@ -1,0 +1,25 @@
+<Window x:Class="AvaLogTestApp.MainWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:AvaLog;assembly=AvaLog"
+        xmlns:local="clr-namespace:AvaLogTestApp"
+        x:DataType="local:MainViewModel"
+        Title="AvaLog Demo"
+        Width="900"
+        Height="600">
+  <Grid RowDefinitions="Auto,*" Margin="8">
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <CheckBox Content="显示时间戳"
+                IsChecked="{Binding ShowTimeStamp}" />
+      <Button Content="清空日志" Command="{Binding ClearCommand}" />
+      <Button Content="测试日志" Command="{Binding TestLogCommand}" />
+    </StackPanel>
+
+    <l:LogViewer Grid.Row="1"
+                 ShowTimeStamp="{Binding ShowTimeStamp}"
+                 ShowDate="{Binding ShowTimeStamp}"
+                 LogOutput="{Binding LogOutput}"
+                 MaxLogEntries="{Binding MaxLogEntries}"
+                 RetainLogEntries="{Binding RetainLogEntries}" />
+  </Grid>
+</Window>
