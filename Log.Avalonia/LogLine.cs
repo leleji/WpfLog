@@ -1,9 +1,10 @@
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
+using WpfLog.Core;
 
 namespace AvaLog;
 
-public sealed class LogLine
+public sealed class LogLine : ILogViewLine
 {
     public LogLine(string text, IBrush foreground)
     {

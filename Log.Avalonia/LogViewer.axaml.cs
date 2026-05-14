@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
@@ -31,20 +31,16 @@ public partial class LogViewer : UserControl
     public static readonly StyledProperty<IDictionary<LogLevel, IBrush>?> LevelBrushesProperty =
         AvaloniaProperty.Register<LogViewer, IDictionary<LogLevel, IBrush>?>(nameof(LevelBrushes));
 
-    private readonly List<LogLine> _lines = new();
-    private readonly ConcurrentQueue<LogLine> _pendingLines = new();
-    private readonly List<double> _lineTops = new();
+    private readonly LogViewportState<LogLine> _state = new();
     private bool _autoScrollEnabled = false;
-    private bool _needsRebuild = false;
-    private double _cachedTotalHeight = 0;
-    private double _lastLayoutWidth = 0;
+
     private readonly Typeface _typeface = new(FontFamily.Default);
     private const double FontSizeValue = 12;
     private bool _initialScrollPending = true;
 
     private const int MaxDrainPerFrame = 200;
 
-    private readonly HashSet<int> _selectedIndices = new();
+
     private bool _isSelecting = false;
     private int _selectionStartIndex = -1;
 
@@ -142,17 +138,13 @@ public partial class LogViewer : UserControl
                 message = $"[{now.Hour:00}:{now.Minute:00}:{now.Second:00}.{now.Millisecond:000}] {message}";
         }
 
-        _pendingLines.Enqueue(new LogLine(message, brush ?? Brushes.White));
+        _state.Enqueue(new LogLine(message, brush ?? Brushes.White));
         Dispatcher.UIThread.Post(DrainLogs, DispatcherPriority.Background);
     }
 
     public void Clear()
     {
-        _pendingLines.Clear();
-        _lines.Clear();
-        _lineTops.Clear();
-        _selectedIndices.Clear();
-        _cachedTotalHeight = 0;
+        _state.Clear();
         _autoScrollEnabled = false;
         _initialScrollPending = true;
         UpdateCanvasView();
@@ -183,23 +175,10 @@ public partial class LogViewer : UserControl
 
     private void DrainLogs()
     {
-        var drained = false;
-        var count = 0;
-        while (count++ < MaxDrainPerFrame && _pendingLines.TryDequeue(out var line))
-        {
-            AddLine(line);
-            drained = true;
-        }
-
-        if (_needsRebuild)
-        {
-            RebuildAllLines();
-            _needsRebuild = false;
-            drained = true;
-        }
-
-        if (TrimIfNeeded())
-            drained = true;
+        var width = HasValidRenderWidth() ? Math.Max(1, LogCanvas.Bounds.Width) : 0;
+        var drained = _state.Drain(MaxDrainPerFrame, width, MeasureLine);
+        drained |= _state.RebuildIfNeeded(width, MeasureLine);
+        drained |= _state.TrimIfNeeded(MaxLogEntries, RetainLogEntries);
 
         if (drained)
         {
@@ -212,22 +191,10 @@ public partial class LogViewer : UserControl
             }
             if (_autoScrollEnabled)
                 ScrollViewer.ScrollToEnd();
+
+            if (_state.HasPending)
+                Dispatcher.UIThread.Post(DrainLogs, DispatcherPriority.Background);
         }
-    }
-
-    private bool TrimIfNeeded()
-    {
-        if (_lines.Count <= MaxLogEntries) return false;
-
-        var removeCount = _lines.Count - RetainLogEntries;
-        if (removeCount <= 0) return false;
-
-        _lines.RemoveRange(0, removeCount);
-        _lineTops.RemoveRange(0, removeCount);
-        _selectedIndices.Clear();
-        RebuildAllLines();
-
-        return true;
     }
 
     private void LogViewer_AttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -242,7 +209,7 @@ public partial class LogViewer : UserControl
         if (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) < 1)
             return;
 
-        _needsRebuild = true;
+        _state.RequestRebuild();
         Dispatcher.UIThread.Post(DrainLogs, DispatcherPriority.Background);
     }
 
@@ -252,51 +219,12 @@ public partial class LogViewer : UserControl
         return !double.IsNaN(width) && width >= MinRenderWidth;
     }
 
-    private void RebuildAllLines()
+    private void MeasureLine(LogLine line, double width)
     {
-        if (!HasValidRenderWidth())
-            return;
-
-        _lineTops.Clear();
-        _cachedTotalHeight = 0;
-        var width = Math.Max(1, LogCanvas.Bounds.Width);
-
-        foreach (var line in _lines)
-        {
-            var layout = CreateLayout(line.Text, width, line.Foreground);
-            line.Layout = layout;
-            line.LayoutWidth = width;
-            line.Height = layout.Height;
-            _lineTops.Add(_cachedTotalHeight);
-            _cachedTotalHeight += line.Height;
-        }
-
-        _lastLayoutWidth = width;
-    }
-
-    private void AddLine(LogLine line)
-    {
-        _lines.Add(line);
-
-        if (!HasValidRenderWidth())
-        {
-            _needsRebuild = true;
-            return;
-        }
-
-        var width = Math.Max(1, LogCanvas.Bounds.Width);
-        if (Math.Abs(width - _lastLayoutWidth) >= 1)
-        {
-            _needsRebuild = true;
-            return;
-        }
-
         var layout = CreateLayout(line.Text, width, line.Foreground);
         line.Layout = layout;
         line.LayoutWidth = width;
         line.Height = layout.Height;
-        _lineTops.Add(_cachedTotalHeight);
-        _cachedTotalHeight += line.Height;
     }
 
     private TextLayout CreateLayout(string text, double width, IBrush brush)
@@ -313,26 +241,18 @@ public partial class LogViewer : UserControl
 
     private void UpdateCanvasView()
     {
-        if (_lines.Count == 0)
-        {
-            LogCanvas.UpdateView(_lines, _lineTops, 0, 0, ScrollViewer.Viewport.Height, _typeface, FontSizeValue, _selectedIndices);
-            return;
-        }
-
-        if (_lineTops.Count != _lines.Count && HasValidRenderWidth())
-        {
-            RebuildAllLines();
-        }
+        if (_state.LineTops.Count != _state.Lines.Count && HasValidRenderWidth())
+            _state.Rebuild(Math.Max(1, LogCanvas.Bounds.Width), MeasureLine);
 
         LogCanvas.UpdateView(
-            _lines,
-            _lineTops,
-            _cachedTotalHeight,
+            _state.Lines,
+            _state.LineTops,
+            _state.TotalHeight,
             ScrollViewer.Offset.Y,
             ScrollViewer.Viewport.Height,
             _typeface,
             FontSizeValue,
-            _selectedIndices);
+            _state.SelectedIndices);
 
         if (_initialScrollPending)
         {
@@ -340,37 +260,12 @@ public partial class LogViewer : UserControl
         }
     }
 
-    private int GetLineIndexFromPosition(Point position)
-    {
-        if (_lines.Count == 0) return -1;
-
-        var y = position.Y;
-        var low = 0;
-        var high = _lineTops.Count - 1;
-        while (low <= high)
-        {
-            var mid = (low + high) / 2;
-            var top = _lineTops[mid];
-            var bottom = top + _lines[mid].Height;
-
-            if (y < top)
-                high = mid - 1;
-            else if (y > bottom)
-                low = mid + 1;
-            else
-                return mid;
-        }
-
-        return -1;
-    }
+    private int GetLineIndexFromPosition(Point position) => _state.HitTest(position.Y);
 
     private void EnsureLayoutForHitTest()
     {
-        if ((_needsRebuild || _lineTops.Count != _lines.Count) && HasValidRenderWidth())
-        {
-            RebuildAllLines();
-            _needsRebuild = false;
-        }
+        if ((_state.NeedsRebuild || _state.LineTops.Count != _state.Lines.Count) && HasValidRenderWidth())
+            _state.Rebuild(Math.Max(1, LogCanvas.Bounds.Width), MeasureLine);
     }
 
     private void LogCanvas_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
@@ -387,10 +282,10 @@ public partial class LogViewer : UserControl
         LogCanvas.Focus();
 
         if ((e.KeyModifiers & Avalonia.Input.KeyModifiers.Control) == 0)
-            _selectedIndices.Clear();
+            _state.ClearSelection();
 
         if (_selectionStartIndex >= 0)
-            ToggleSelection(_selectionStartIndex);
+            _state.ToggleSelection(_selectionStartIndex);
 
         UpdateCanvasView();
         e.Handled = true;
@@ -412,29 +307,10 @@ public partial class LogViewer : UserControl
         var point = e.GetPosition(LogCanvas);
         var currentIndex = GetLineIndexFromPosition(point);
         if (currentIndex >= 0 && currentIndex != _selectionStartIndex)
-            RangeSelection(_selectionStartIndex, currentIndex);
+            _state.RangeSelection(_selectionStartIndex, currentIndex);
 
         UpdateCanvasView();
         e.Handled = true;
-    }
-
-    private void ToggleSelection(int index)
-    {
-        if (index < 0 || index >= _lines.Count) return;
-
-        if (_selectedIndices.Contains(index))
-            _selectedIndices.Remove(index);
-        else
-            _selectedIndices.Add(index);
-    }
-
-    private void RangeSelection(int start, int end)
-    {
-        _selectedIndices.Clear();
-        var min = Math.Min(start, end);
-        var max = Math.Max(start, end);
-        for (var i = min; i <= max; i++)
-            _selectedIndices.Add(i);
     }
 
     private void OnLogOutputChanged(AvaloniaPropertyChangedEventArgs e)
@@ -460,13 +336,13 @@ public partial class LogViewer : UserControl
 
     private async void CopySelectedLogs_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (_selectedIndices.Count == 0) return;
+        if (_state.SelectedIndices.Count == 0) return;
 
-        var indices = new List<int>(_selectedIndices);
+        var indices = new List<int>(_state.SelectedIndices);
         indices.Sort();
         var texts = new List<string>(indices.Count);
         foreach (var index in indices)
-            texts.Add(_lines[index].Text);
+            texts.Add(_state.Lines[index].Text);
 
         var text = string.Join(Environment.NewLine, texts);
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
@@ -476,8 +352,8 @@ public partial class LogViewer : UserControl
 
     private async void CopyAllLogs_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (_lines.Count == 0) return;
-        var text = string.Join(Environment.NewLine, _lines.ConvertAll(l => l.Text));
+        if (_state.Lines.Count == 0) return;
+        var text = string.Join(Environment.NewLine, _state.Lines.Select(l => l.Text));
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
         if (clipboard != null)
             await clipboard.SetTextAsync(text);

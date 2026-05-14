@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
+using WpfLog.Core;
 
 namespace AvaLog;
 
@@ -68,7 +69,7 @@ public sealed class LogCanvas : Control
         var viewTop = VerticalOffset;
         var viewBottom = viewTop + ViewportHeight;
 
-        var startIndex = FindStartIndex(viewTop);
+        var startIndex = LogViewportState<LogLine>.FindStartIndex(_lines, _lineTops, viewTop);
         if (startIndex < 0) return;
 
         for (var i = startIndex; i < _lines.Count; i++)
@@ -100,29 +101,5 @@ public sealed class LogCanvas : Control
                 layout.Draw(context, new Point(0, y));
             }
         }
-    }
-
-    private int FindStartIndex(double viewTop)
-    {
-        if (_lineTops == null || _lineTops.Count == 0)
-            return -1;
-
-        var low = 0;
-        var high = _lineTops.Count - 1;
-        while (low <= high)
-        {
-            var mid = (low + high) / 2;
-            var midTop = _lineTops[mid];
-            var midBottom = midTop + _lines![mid].Height;
-
-            if (midBottom < viewTop)
-                low = mid + 1;
-            else if (midTop > viewTop)
-                high = mid - 1;
-            else
-                return mid;
-        }
-
-        return Math.Clamp(low, 0, _lineTops.Count - 1);
     }
 }
