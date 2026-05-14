@@ -41,6 +41,10 @@ namespace WpfLog
         public static readonly DependencyProperty LogOutputProperty =
             DependencyProperty.Register(nameof(LogOutput), typeof(ILogOutput),
                 typeof(LogViewer), new PropertyMetadata(null, OnLogOutputChanged));
+
+        public static readonly DependencyProperty LevelBrushesProperty =
+            DependencyProperty.Register(nameof(LevelBrushes), typeof(IDictionary<LogLevel, Brush>),
+                typeof(LogViewer), new PropertyMetadata(null));
         /// <summary>
         /// 外部日志输出接口。
         /// LogViewer 会将其绑定为日志接收入口。
@@ -73,10 +77,16 @@ namespace WpfLog
             set => SetValue(ShowTimeStampProperty, value);
         }
 
-        public ILogOutput LogOutput
+        public ILogOutput? LogOutput
         {
-            get => (ILogOutput)GetValue(LogOutputProperty);
+            get => (ILogOutput?)GetValue(LogOutputProperty);
             set => SetValue(LogOutputProperty, value);
+        }
+
+        public IDictionary<LogLevel, Brush>? LevelBrushes
+        {
+            get => (IDictionary<LogLevel, Brush>?)GetValue(LevelBrushesProperty);
+            set => SetValue(LevelBrushesProperty, value);
         }
 
         #endregion
@@ -264,17 +274,37 @@ public void Add(Visual v)
 
 
         private bool _needsRebuild = false;
-        private System.Timers.Timer _resizeTimer;
+        private System.Timers.Timer? _resizeTimer;
 
 
-        private static readonly Dictionary<LogColor, Brush> ColorMap = new()
+        private static readonly Dictionary<LogLevel, Brush> DefaultLevelBrushes = new()
         {
-            { LogColor.White, Brushes.Black },
-            { LogColor.Yellow, new SolidColorBrush(Color.FromRgb(184, 134, 11)) },
-            { LogColor.Red, Brushes.Red },
-            { LogColor.Gray, Brushes.Gray },
-            { LogColor.Green, Brushes.Green }
+            { LogLevel.Trace, Brushes.Gray },
+            { LogLevel.Debug, Brushes.Gray },
+            { LogLevel.Info, Brushes.Black },
+            { LogLevel.Success, Brushes.Green },
+            { LogLevel.Warning, new SolidColorBrush(Color.FromRgb(184, 134, 11)) },
+            { LogLevel.Error, Brushes.Red },
+            { LogLevel.Critical, new SolidColorBrush(Color.FromRgb(139, 0, 0)) }
         };
+
+        private Brush ResolveBrush(LogEntry entry)
+        {
+            if (entry.Foreground.HasValue)
+                return ToBrush(entry.Foreground.Value);
+
+            if (LevelBrushes != null && LevelBrushes.TryGetValue(entry.Level, out var configuredBrush))
+                return configuredBrush;
+
+            return DefaultLevelBrushes.GetValueOrDefault(entry.Level, Brushes.Black);
+        }
+
+        private static Brush ToBrush(LogColor color)
+        {
+            var brush = new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+            brush.Freeze();
+            return brush;
+        }
 
 /// <summary>
         /// 缓存的Typeface，避免重复创建
@@ -311,6 +341,25 @@ LogHost.Children.Add(_visualHost);
             LogHost.MouseLeftButtonDown += LogHost_MouseLeftButtonDown;
             LogHost.MouseLeftButtonUp += LogHost_MouseLeftButtonUp;
             LogHost.MouseMove += LogHost_MouseMove;
+            Unloaded += LogViewer_Unloaded;
+        }
+
+        private void LogViewer_Unloaded(object sender, RoutedEventArgs e)
+        {
+            ScrollViewer.ScrollChanged -= ScrollViewer_ScrollChanged;
+            CompositionTarget.Rendering -= OnRendering;
+            LogHost.SizeChanged -= LogHost_SizeChanged;
+            IsVisibleChanged -= LogViewer_IsVisibleChanged;
+            LogHost.MouseLeftButtonDown -= LogHost_MouseLeftButtonDown;
+            LogHost.MouseLeftButtonUp -= LogHost_MouseLeftButtonUp;
+            LogHost.MouseMove -= LogHost_MouseMove;
+            Unloaded -= LogViewer_Unloaded;
+            _resizeTimer?.Stop();
+            _resizeTimer?.Dispose();
+            _resizeTimer = null;
+
+            if (LogOutput is not null)
+                LogOutput.LogHandler = null;
         }
 
         private void LogViewer_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -497,7 +546,9 @@ var line = _lines[index];
         /// 添加一条日志（线程安全）。
         /// 实际渲染会延迟到 UI 帧循环中处理。
         /// </summary>
-public void AddLog(string message, Brush color)
+public void AddLog(string message, Brush color) => AddLog(message, color, DateTimeOffset.Now);
+
+        private void AddLog(string message, Brush color, DateTimeOffset timestamp)
         {
             if (string.IsNullOrEmpty(message))
                 return;
@@ -505,7 +556,7 @@ public void AddLog(string message, Brush color)
             if (ShowTimeStamp)
             {
                 // 使用更高效的时间格式化
-                var now = DateTime.Now;
+                var now = timestamp.LocalDateTime;
                 if (ShowDate)
                     message = $"[{now.Month:00}-{now.Day:00} {now.Hour:00}:{now.Minute:00}:{now.Second:00}.{now.Millisecond:000}] {message}";
                 else
@@ -551,7 +602,7 @@ public void Clear()
             };
             _resizeTimer.Start();
         }
-        private void OnRendering(object sender, EventArgs e)
+        private void OnRendering(object? sender, EventArgs e)
         {
             if (!_isViewActive) return;
 
@@ -717,12 +768,16 @@ _visualHost.Height = _cachedTotalHeight;
 
             if (e.NewValue is ILogOutput newOut)
             {
-                newOut.LogHandler = (msg, col) =>
+                newOut.LogHandler = entry =>
                 {
-                    if (msg == null)
+                    if (entry.Type == LogEventType.Clear)
+                    {
                         v.Clear();
-                    else
-                        v.AddLog(msg, ColorMap.GetValueOrDefault(col, Brushes.White));
+                        return;
+                    }
+
+                    if (!string.IsNullOrEmpty(entry.Message))
+                        v.AddLog(entry.Message, v.ResolveBrush(entry), entry.Timestamp ?? DateTimeOffset.Now);
                 };
             }
         }

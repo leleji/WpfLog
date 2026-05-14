@@ -28,6 +28,9 @@ public partial class LogViewer : UserControl
     public static readonly StyledProperty<ILogOutput?> LogOutputProperty =
         AvaloniaProperty.Register<LogViewer, ILogOutput?>(nameof(LogOutput));
 
+    public static readonly StyledProperty<IDictionary<LogLevel, IBrush>?> LevelBrushesProperty =
+        AvaloniaProperty.Register<LogViewer, IDictionary<LogLevel, IBrush>?>(nameof(LevelBrushes));
+
     private readonly List<LogLine> _lines = new();
     private readonly ConcurrentQueue<LogLine> _pendingLines = new();
     private readonly List<double> _lineTops = new();
@@ -91,22 +94,48 @@ public partial class LogViewer : UserControl
         set => SetValue(LogOutputProperty, value);
     }
 
-    private static readonly Dictionary<LogColor, IBrush> ColorMap = new()
+    public IDictionary<LogLevel, IBrush>? LevelBrushes
     {
-        [LogColor.White] = Brushes.Black,
-        [LogColor.Yellow] = new SolidColorBrush(Color.FromRgb(184, 134, 11)),
-        [LogColor.Red] = Brushes.Red,
-        [LogColor.Gray] = Brushes.Gray,
-        [LogColor.Green] = Brushes.Green
+        get => GetValue(LevelBrushesProperty);
+        set => SetValue(LevelBrushesProperty, value);
+    }
+
+    private static readonly Dictionary<LogLevel, IBrush> DefaultLevelBrushes = new()
+    {
+        [LogLevel.Trace] = Brushes.Gray,
+        [LogLevel.Debug] = Brushes.Gray,
+        [LogLevel.Info] = Brushes.Black,
+        [LogLevel.Success] = Brushes.Green,
+        [LogLevel.Warning] = new SolidColorBrush(Color.FromRgb(184, 134, 11)),
+        [LogLevel.Error] = Brushes.Red,
+        [LogLevel.Critical] = new SolidColorBrush(Color.FromRgb(139, 0, 0))
     };
 
-    public void AddLog(string message, IBrush? brush)
+    private IBrush ResolveBrush(LogEntry entry)
+    {
+        if (entry.Foreground.HasValue)
+            return ToBrush(entry.Foreground.Value);
+
+        if (LevelBrushes != null && LevelBrushes.TryGetValue(entry.Level, out var configuredBrush))
+            return configuredBrush;
+
+        return DefaultLevelBrushes.GetValueOrDefault(entry.Level, Brushes.Black);
+    }
+
+    private static IBrush ToBrush(LogColor color)
+    {
+        return new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+    }
+
+    public void AddLog(string message, IBrush? brush) => AddLog(message, brush, DateTimeOffset.Now);
+
+    private void AddLog(string message, IBrush? brush, DateTimeOffset timestamp)
     {
         if (string.IsNullOrEmpty(message)) return;
 
         if (ShowTimeStamp)
         {
-            var now = DateTime.Now;
+            var now = timestamp.LocalDateTime;
             if (ShowDate)
                 message = $"[{now.Month:00}-{now.Day:00} {now.Hour:00}:{now.Minute:00}:{now.Second:00}.{now.Millisecond:000}] {message}";
             else
@@ -415,12 +444,16 @@ public partial class LogViewer : UserControl
 
         if (e.NewValue is ILogOutput newOut)
         {
-            newOut.LogHandler = (msg, col) =>
+            newOut.LogHandler = entry =>
             {
-                if (msg == null)
+                if (entry.Type == LogEventType.Clear)
+                {
                     Clear();
-                else
-                    AddLog(msg, ColorMap.GetValueOrDefault(col, Brushes.White));
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(entry.Message))
+                    AddLog(entry.Message, ResolveBrush(entry), entry.Timestamp ?? DateTimeOffset.Now);
             };
         }
     }

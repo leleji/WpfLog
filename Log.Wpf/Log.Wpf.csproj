@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>disable</Nullable>
+    <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Version>1.2.3</Version>
@@ -15,3 +15,4 @@
   </ItemGroup>
 
 </Project>
+

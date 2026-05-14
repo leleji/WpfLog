@@ -1,6 +1,5 @@
 using System;
 using System.Windows.Input;
-using System.Windows.Media;
 using WpfLog;
 using WpfLog.Core;
 
@@ -8,7 +7,7 @@ namespace WpfLogTestApp
 {
     public class MainViewModel : ViewModelBase
     {
-        private ILogOutput _logOutput;
+        private ILogOutput _logOutput = null!;
         private bool _showTimeStamp = true;
         private int _maxLogEntries = 1000;
         private int _retainLogEntries = 100;
