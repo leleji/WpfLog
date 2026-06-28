@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <PackageId>LeLog.Core</PackageId>
     <AssemblyName>Log.Core</AssemblyName>
-    <Version>1.2.4</Version>
+    <Version>1.2.5</Version>
   </PropertyGroup>
 
 </Project>

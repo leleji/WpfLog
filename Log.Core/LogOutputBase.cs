@@ -58,7 +58,10 @@ public abstract class LogOutputBase : ILogOutput
                 pending.Add(_pendingLogs.Dequeue());
         }
 
-        foreach (var entry in pending)
-            Publish(entry);
+        Dispatch(() =>
+        {
+            foreach (var entry in pending)
+                _logHandler?.Invoke(entry);
+        });
     }
 }

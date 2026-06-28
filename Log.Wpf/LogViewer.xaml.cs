@@ -39,6 +39,7 @@ namespace WpfLog
         private readonly Typeface _typeface = new("Microsoft YaHei UI");
 
         private bool _autoScrollEnabled = true;
+        private bool _drainScheduled;
         private bool _isSelecting;
         private int _selectionStartIndex = -1;
         private System.Timers.Timer? _resizeTimer;
@@ -126,7 +127,7 @@ namespace WpfLog
                 message = FormatTimestamp(timestamp) + message;
 
             _state.Enqueue(new LogLine(message, color ?? Brushes.White));
-            Dispatcher.BeginInvoke(DrainLogs, DispatcherPriority.Background);
+            ScheduleDrain();
         }
 
         private string FormatTimestamp(DateTimeOffset timestamp)
@@ -142,7 +143,7 @@ namespace WpfLog
             AttachLogOutput(LogOutput);
             _autoScrollEnabled = true;
             _state.RequestRebuild();
-            Dispatcher.BeginInvoke(DrainLogs, DispatcherPriority.Background);
+            DrainLogs(int.MaxValue);
             ScrollToEndDeferred();
         }
 
@@ -152,8 +153,6 @@ namespace WpfLog
             _resizeTimer?.Dispose();
             _resizeTimer = null;
 
-            if (LogOutput is not null)
-                LogOutput.LogHandler = null;
         }
 
         private void ScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
@@ -191,10 +190,22 @@ namespace WpfLog
             _resizeTimer.Start();
         }
 
-        private void DrainLogs()
+        private void ScheduleDrain()
         {
+            if (_drainScheduled)
+                return;
+
+            _drainScheduled = true;
+            Dispatcher.BeginInvoke(new Action(DrainLogs), DispatcherPriority.Background);
+        }
+
+        private void DrainLogs() => DrainLogs(MaxDrainPerFrame);
+
+        private void DrainLogs(int maxCount)
+        {
+            _drainScheduled = false;
             var width = HasValidRenderWidth() ? RenderWidth : 0;
-            var drained = _state.Drain(MaxDrainPerFrame, width, MeasureLine);
+            var drained = _state.Drain(maxCount, width, MeasureLine);
             drained |= _state.RebuildIfNeeded(width, MeasureLine);
             drained |= _state.TrimIfNeeded(MaxLogEntries, RetainLogEntries);
 
@@ -206,7 +217,7 @@ namespace WpfLog
                 ScrollToEndDeferred();
 
             if (_state.HasPending)
-                Dispatcher.BeginInvoke(DrainLogs, DispatcherPriority.Background);
+                ScheduleDrain();
         }
 
         private void MeasureLine(LogLine line, double width)
